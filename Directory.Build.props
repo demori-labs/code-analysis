@@ -1,0 +1,15 @@
+<Project>
+    <PropertyGroup>
+        <RootDir>$(MSBuildThisFileDirectory)/</RootDir>
+        <EngineeringDir>$(MSBuildThisFileDirectory)/eng/</EngineeringDir>
+        <LangVersion>latest</LangVersion>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <Nullable>enable</Nullable>
+        <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+    </PropertyGroup>
+    <!-- Warnings -->
+    <PropertyGroup>
+        <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+        <NoWarn Condition="'$(GenerateDocumentationFile)' != 'true'">$(NoWarn);SA1600;SA0001</NoWarn>
+    </PropertyGroup>
+</Project>

@@ -1,0 +1,14 @@
+<Project>
+    <PropertyGroup>
+        <ArtifactsPath>$(RootDir)artifacts</ArtifactsPath>
+        <EnablePackageValidation>true</EnablePackageValidation>
+    </PropertyGroup>
+    <PropertyGroup>
+        <Company>Demori Labs</Company>
+        <Authors>Jack Demori</Authors>
+        <PackageLicenseExpression>MIT</PackageLicenseExpression>
+        <RepositoryType>git</RepositoryType>
+        <PackageReadmeFile>README.md</PackageReadmeFile>
+        <PackageIcon>icon.png</PackageIcon>
+    </PropertyGroup>
+</Project>

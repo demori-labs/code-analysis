@@ -1,0 +1,10 @@
+<Solution>
+    <Folder Name="/src/">
+        <Project Path="src/DemoriLabs.Diagnostics.Attributes/DemoriLabs.Diagnostics.Attributes.csproj" />
+        <Project Path="src/DemoriLabs.Diagnostics/DemoriLabs.Diagnostics.csproj" />
+        <Project Path="src/DemoriLabs.Diagnostics.CodeFixes/DemoriLabs.Diagnostics.CodeFixes.csproj" />
+    </Folder>
+    <Folder Name="/test/">
+        <Project Path="test/DemoriLabs.Diagnostics.Tests.Unit/DemoriLabs.Diagnostics.Tests.Unit.csproj" />
+    </Folder>
+</Solution>
