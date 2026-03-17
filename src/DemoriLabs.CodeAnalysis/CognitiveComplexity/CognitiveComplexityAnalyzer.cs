@@ -53,6 +53,13 @@ public sealed class CognitiveComplexityAnalyzer : DiagnosticAnalyzer
     private static void AnalyzeMethod(SyntaxNodeAnalysisContext context)
     {
         var methodSyntax = (MethodDeclarationSyntax)context.Node;
+
+        var body = (SyntaxNode?)methodSyntax.Body ?? methodSyntax.ExpressionBody;
+        if (body is null)
+        {
+            return;
+        }
+
         var methodSymbol = context.SemanticModel.GetDeclaredSymbol(methodSyntax, context.CancellationToken);
         if (methodSymbol is null)
         {
@@ -65,12 +72,6 @@ public sealed class CognitiveComplexityAnalyzer : DiagnosticAnalyzer
         }
 
         var (moderateThreshold, elevatedThreshold) = ResolveThresholds(methodSymbol, context);
-
-        var body = (SyntaxNode?)methodSyntax.Body ?? methodSyntax.ExpressionBody;
-        if (body is null)
-        {
-            return;
-        }
 
         var complexity = CognitiveComplexityCalculator.Calculate(body, context.SemanticModel, methodSymbol);
 
@@ -116,7 +117,9 @@ public sealed class CognitiveComplexityAnalyzer : DiagnosticAnalyzer
             ?? AnnotationAttributes.GetCognitiveComplexityThresholdAttribute(method.ContainingType);
 
         if (thresholdAttribute is null)
+        {
             return GetThresholdsFromOptions(context);
+        }
 
         var moderate = thresholdAttribute.ConstructorArguments[0].Value as int? ?? DefaultModerateThreshold;
         var elevated = thresholdAttribute.ConstructorArguments[1].Value as int? ?? DefaultElevatedThreshold;

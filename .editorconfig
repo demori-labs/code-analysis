@@ -475,6 +475,7 @@ dotnet_diagnostic.SA1111.severity = none
 dotnet_analyzer_diagnostic.category-StyleCop.CSharp.DocumentationRules.severity = none
 
 # Sonar Rules
+dotnet_diagnostic.S1125.severity = none
 dotnet_diagnostic.S2325.severity = none
 
 # VS Threading Rules

@@ -11,12 +11,18 @@ internal sealed class CognitiveComplexityCalculator : CSharpSyntaxWalker
     private bool _recursionDetected;
     private SemanticModel? _semanticModel;
     private IMethodSymbol? _method;
+    private string? _methodName;
 
     private CognitiveComplexityCalculator() { }
 
     internal static int Calculate(SyntaxNode body, SemanticModel semanticModel, IMethodSymbol method)
     {
-        var calculator = new CognitiveComplexityCalculator { _semanticModel = semanticModel, _method = method };
+        var calculator = new CognitiveComplexityCalculator
+        {
+            _semanticModel = semanticModel,
+            _method = method,
+            _methodName = method.Name,
+        };
         calculator.Visit(body);
         return calculator._complexity;
     }
@@ -149,9 +155,10 @@ internal sealed class CognitiveComplexityCalculator : CSharpSyntaxWalker
     public override void VisitInvocationExpression(InvocationExpressionSyntax node)
     {
         if (
-            !_recursionDetected
+            _recursionDetected is false
             && _semanticModel is not null
             && _method is not null
+            && MatchesMethodName(node)
             && SymbolEqualityComparer.Default.Equals(
                 _semanticModel.GetSymbolInfo(node).Symbol?.OriginalDefinition,
                 _method.OriginalDefinition
@@ -163,6 +170,18 @@ internal sealed class CognitiveComplexityCalculator : CSharpSyntaxWalker
         }
 
         base.VisitInvocationExpression(node);
+    }
+
+    private bool MatchesMethodName(InvocationExpressionSyntax node)
+    {
+        var name = node.Expression switch
+        {
+            IdentifierNameSyntax id => id.Identifier.ValueText,
+            MemberAccessExpressionSyntax { Name: IdentifierNameSyntax id } => id.Identifier.ValueText,
+            _ => null,
+        };
+
+        return name == _methodName;
     }
 
     public override void VisitSimpleLambdaExpression(SimpleLambdaExpressionSyntax node)

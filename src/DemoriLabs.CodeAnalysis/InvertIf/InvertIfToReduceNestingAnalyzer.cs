@@ -68,25 +68,21 @@ public sealed class InvertIfToReduceNestingAnalyzer : DiagnosticAnalyzer
 
         if (ifStatement.Else is not null)
         {
-            // If-else: invertible if every terminal branch of the else ends with an exit
             if (!ElseChainEndsWithExits(ifStatement.Else))
+            {
                 return;
+            }
         }
-        else
+        else if (isLast)
         {
-            if (isLast)
-            {
-                if (exitContext is not (ExitContext.VoidReturn or ExitContext.Continue))
-                    return;
-            }
-            else if (isSecondToLast && IsExitStatement(parentStatements[ifIndex + 1]))
-            {
-                // If followed by an exit statement — worth inverting
-            }
-            else
+            if (exitContext is not (ExitContext.VoidReturn or ExitContext.Continue))
             {
                 return;
             }
+        }
+        else if (isSecondToLast is false || IsExitStatement(parentStatements[ifIndex + 1]) is false)
+        {
+            return;
         }
 
         context.ReportDiagnostic(Diagnostic.Create(Rule, ifStatement.IfKeyword.GetLocation()));
@@ -100,7 +96,7 @@ public sealed class InvertIfToReduceNestingAnalyzer : DiagnosticAnalyzer
         {
             BlockSyntax block => block.Statements.Count > 0 && IsExitStatement(block.Statements.Last()),
             IfStatementSyntax { Statement: BlockSyntax elseIfBlock }
-                when !IsExitStatement(elseIfBlock.Statements.Last()) => false,
+                when IsExitStatement(elseIfBlock.Statements[elseIfBlock.Statements.Count - 1]) is false => false,
             IfStatementSyntax { Else: not null } elseIf => ElseChainEndsWithExits(elseIf.Else),
             IfStatementSyntax => true,
             _ => IsExitStatement(elseStatement),
@@ -121,15 +117,15 @@ public sealed class InvertIfToReduceNestingAnalyzer : DiagnosticAnalyzer
     {
         return block.Parent switch
         {
-            ConstructorDeclarationSyntax => ExitContext.VoidReturn,
-            DestructorDeclarationSyntax => ExitContext.VoidReturn,
-            AccessorDeclarationSyntax => ExitContext.VoidReturn,
             MethodDeclarationSyntax method => GetMethodExitContext(method, semanticModel, ct),
-            LocalFunctionStatementSyntax localFunc => GetLocalFunctionExitContext(localFunc, semanticModel, ct),
             ForEachStatementSyntax => ExitContext.Continue,
             ForStatementSyntax => ExitContext.Continue,
             WhileStatementSyntax => ExitContext.Continue,
             DoStatementSyntax => ExitContext.Continue,
+            ConstructorDeclarationSyntax => ExitContext.VoidReturn,
+            DestructorDeclarationSyntax => ExitContext.VoidReturn,
+            AccessorDeclarationSyntax => ExitContext.VoidReturn,
+            LocalFunctionStatementSyntax localFunc => GetLocalFunctionExitContext(localFunc, semanticModel, ct),
             SimpleLambdaExpressionSyntax => ExitContext.VoidReturn,
             ParenthesizedLambdaExpressionSyntax => ExitContext.VoidReturn,
             AnonymousMethodExpressionSyntax => ExitContext.VoidReturn,
@@ -144,6 +140,27 @@ public sealed class InvertIfToReduceNestingAnalyzer : DiagnosticAnalyzer
         CancellationToken ct
     )
     {
+        // Fast syntactic check: void and other predefined types (int, bool, etc.)
+        if (method.ReturnType is PredefinedTypeSyntax predefined)
+        {
+            return predefined.Keyword.IsKind(SyntaxKind.VoidKeyword) ? ExitContext.VoidReturn : ExitContext.ValueReturn;
+        }
+
+        // Fast syntactic check: types that can never be non-generic Task/ValueTask
+        if (
+            method.ReturnType
+            is GenericNameSyntax
+                or ArrayTypeSyntax
+                or TupleTypeSyntax
+                or NullableTypeSyntax
+                or PointerTypeSyntax
+                or RefTypeSyntax
+        )
+        {
+            return ExitContext.ValueReturn;
+        }
+
+        // Slow path: could be Task, ValueTask, or other — need semantic model
         var symbol = semanticModel.GetDeclaredSymbol(method, ct);
         if (symbol is null)
             return ExitContext.None;
@@ -157,6 +174,27 @@ public sealed class InvertIfToReduceNestingAnalyzer : DiagnosticAnalyzer
         CancellationToken ct
     )
     {
+        // Fast syntactic check: void and other predefined types
+        if (localFunc.ReturnType is PredefinedTypeSyntax predefined)
+        {
+            return predefined.Keyword.IsKind(SyntaxKind.VoidKeyword) ? ExitContext.VoidReturn : ExitContext.ValueReturn;
+        }
+
+        // Fast syntactic check: types that can never be non-generic Task/ValueTask
+        if (
+            localFunc.ReturnType
+            is GenericNameSyntax
+                or ArrayTypeSyntax
+                or TupleTypeSyntax
+                or NullableTypeSyntax
+                or PointerTypeSyntax
+                or RefTypeSyntax
+        )
+        {
+            return ExitContext.ValueReturn;
+        }
+
+        // Slow path: could be Task, ValueTask, or other — need semantic model
         if (semanticModel.GetDeclaredSymbol(localFunc, ct) is not { } symbol)
             return ExitContext.None;
 

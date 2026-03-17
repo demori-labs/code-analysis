@@ -13,6 +13,8 @@ namespace DemoriLabs.CodeAnalysis.CodeFixes;
 [Shared]
 public sealed class InvertIfToReduceNestingCodeFix : CodeFixProvider
 {
+    private static readonly SyntaxTrivia NewLine = SyntaxFactory.EndOfLine("\n");
+
     /// <inheritdoc />
     public override ImmutableArray<string> FixableDiagnosticIds => [RuleIdentifiers.InvertIfToReduceNesting];
 
@@ -91,20 +93,20 @@ public sealed class InvertIfToReduceNestingCodeFix : CodeFixProvider
         for (var i = ifIndex + 1; i < parentStatements.Count; i++)
             statementsAfterIf.Add(parentStatements[i]);
 
-        // Collect constant member accesses using the semantic model
-        var semanticModel = await document.GetSemanticModelAsync(ct).ConfigureAwait(false);
-        var knownConstants = CollectConstantMemberAccesses(ifStatement, semanticModel);
+        // Only collect constant member accesses when there are == or != comparisons
+        // with member access operands, to avoid unnecessary semantic model queries.
+        var knownConstants = HasMemberAccessComparisons(ifStatement)
+            ? CollectConstantMemberAccesses(ifStatement, await document.GetSemanticModelAsync(ct).ConfigureAwait(false))
+            : new HashSet<string>();
 
         // Flatten the if statement recursively
         var flattened = FlattenIf(ifStatement, statementsAfterIf, exitKind, ifIndent);
         newStatements.AddRange(flattened);
 
-        var rewriter = new ComparisonToPatternRewriter(knownConstants);
-
         if (parentNode is BlockSyntax block)
         {
             var newBlock = block.WithStatements(SyntaxFactory.List(newStatements));
-            newBlock = (BlockSyntax)rewriter.Visit(newBlock);
+            newBlock = RewriteComparisons(newBlock, knownConstants);
             var newRoot = root.ReplaceNode(block, newBlock);
             return document.WithSyntaxRoot(newRoot);
         }
@@ -112,7 +114,7 @@ public sealed class InvertIfToReduceNestingCodeFix : CodeFixProvider
         {
             var section = (SwitchSectionSyntax)parentNode;
             var newSection = section.WithStatements(SyntaxFactory.List(newStatements));
-            newSection = (SwitchSectionSyntax)rewriter.Visit(newSection);
+            newSection = RewriteComparisons(newSection, knownConstants);
             var newRoot = root.ReplaceNode(section, newSection);
             return document.WithSyntaxRoot(newRoot);
         }
@@ -178,7 +180,7 @@ public sealed class InvertIfToReduceNestingCodeFix : CodeFixProvider
         {
             var leading =
                 i == trailingStart
-                    ? SyntaxFactory.TriviaList(SyntaxFactory.EndOfLine("\n"), indentTrivia)
+                    ? SyntaxFactory.TriviaList(NewLine, indentTrivia)
                     : SyntaxFactory.TriviaList(indentTrivia);
             result.Add(statementsAfterIf[i].WithLeadingTrivia(leading));
         }
@@ -252,7 +254,7 @@ public sealed class InvertIfToReduceNestingCodeFix : CodeFixProvider
             var guardBody = BuildGuardFromExit(ifBlock.Statements[0], indent);
             var leading =
                 result.Count > 0
-                    ? SyntaxFactory.TriviaList(SyntaxFactory.EndOfLine("\n"), indentTrivia)
+                    ? SyntaxFactory.TriviaList(NewLine, indentTrivia)
                     : ifStatement.GetLeadingTrivia();
             var guard = BuildGuardIf(leading, ifStatement.Condition.WithoutTrivia().NormalizeWhitespace(), guardBody);
             result.Add(guard);
@@ -262,7 +264,7 @@ public sealed class InvertIfToReduceNestingCodeFix : CodeFixProvider
             // Multi-statement body: keep as if-block without else
             var leading =
                 result.Count > 0
-                    ? SyntaxFactory.TriviaList(SyntaxFactory.EndOfLine("\n"), indentTrivia)
+                    ? SyntaxFactory.TriviaList(NewLine, indentTrivia)
                     : ifStatement.GetLeadingTrivia();
             var reindentedBlock = ReindentNode(ifBlock, GetIndentationString(ifBlock), indent);
             var newIf = SyntaxFactory.IfStatement(
@@ -331,7 +333,7 @@ public sealed class InvertIfToReduceNestingCodeFix : CodeFixProvider
                 if (flattened.Count > 0 && statements.Count > 0)
                 {
                     flattened[0] = flattened[0]
-                        .WithLeadingTrivia(SyntaxFactory.EndOfLine("\n"), SyntaxFactory.Whitespace(indent));
+                        .WithLeadingTrivia(NewLine, SyntaxFactory.Whitespace(indent));
                 }
                 statements.AddRange(flattened);
                 changed = true;
@@ -353,7 +355,7 @@ public sealed class InvertIfToReduceNestingCodeFix : CodeFixProvider
                 if (flattened.Count > 0 && statements.Count > 0)
                 {
                     flattened[0] = flattened[0]
-                        .WithLeadingTrivia(SyntaxFactory.EndOfLine("\n"), SyntaxFactory.Whitespace(indent));
+                        .WithLeadingTrivia(NewLine, SyntaxFactory.Whitespace(indent));
                 }
                 statements.AddRange(flattened);
                 changed = true;
@@ -389,7 +391,7 @@ public sealed class InvertIfToReduceNestingCodeFix : CodeFixProvider
 
                 var leading =
                     isFirst && i == 0
-                        ? SyntaxFactory.TriviaList(SyntaxFactory.EndOfLine("\n"), indentTrivia)
+                        ? SyntaxFactory.TriviaList(NewLine, indentTrivia)
                         : SyntaxFactory.TriviaList(indentTrivia);
                 result.Add(usingDecl.WithLeadingTrivia(leading));
 
@@ -410,7 +412,7 @@ public sealed class InvertIfToReduceNestingCodeFix : CodeFixProvider
 
             var stmtLeading =
                 isFirst && i == 0
-                    ? SyntaxFactory.TriviaList(SyntaxFactory.EndOfLine("\n"), indentTrivia)
+                    ? SyntaxFactory.TriviaList(NewLine, indentTrivia)
                     : SyntaxFactory.TriviaList(indentTrivia);
 
             result.Add(reindentedStmt.WithLeadingTrivia(stmtLeading));
@@ -421,18 +423,31 @@ public sealed class InvertIfToReduceNestingCodeFix : CodeFixProvider
         where T : SyntaxNode
     {
         if (fromIndent == toIndent)
+        {
             return node;
+        }
+
+        var toIndentTrivia = SyntaxFactory.Whitespace(toIndent);
 
         return node.ReplaceTrivia(
             node.DescendantTrivia(),
             (original, _) =>
             {
                 if (!original.IsKind(SyntaxKind.WhitespaceTrivia))
+                {
                     return original;
+                }
 
                 var text = original.ToString();
+                if (text == fromIndent)
+                {
+                    return toIndentTrivia;
+                }
+
                 if (text.StartsWith(fromIndent))
+                {
                     return SyntaxFactory.Whitespace(toIndent + text.Substring(fromIndent.Length));
+                }
 
                 return original;
             }
@@ -469,10 +484,10 @@ public sealed class InvertIfToReduceNestingCodeFix : CodeFixProvider
                 .WithReturnKeyword(
                     SyntaxFactory
                         .Token(SyntaxKind.ReturnKeyword)
-                        .WithLeadingTrivia(SyntaxFactory.EndOfLine("\n"), SyntaxFactory.Whitespace(bodyIndent))
+                        .WithLeadingTrivia(NewLine, SyntaxFactory.Whitespace(bodyIndent))
                 )
                 .WithSemicolonToken(
-                    SyntaxFactory.Token(SyntaxKind.SemicolonToken).WithTrailingTrivia(SyntaxFactory.EndOfLine("\n"))
+                    SyntaxFactory.Token(SyntaxKind.SemicolonToken).WithTrailingTrivia(NewLine)
                 ),
 
             ThrowStatementSyntax thr => SyntaxFactory
@@ -480,15 +495,15 @@ public sealed class InvertIfToReduceNestingCodeFix : CodeFixProvider
                 .WithThrowKeyword(
                     SyntaxFactory
                         .Token(SyntaxKind.ThrowKeyword)
-                        .WithLeadingTrivia(SyntaxFactory.EndOfLine("\n"), SyntaxFactory.Whitespace(bodyIndent))
+                        .WithLeadingTrivia(NewLine, SyntaxFactory.Whitespace(bodyIndent))
                 )
                 .WithSemicolonToken(
-                    SyntaxFactory.Token(SyntaxKind.SemicolonToken).WithTrailingTrivia(SyntaxFactory.EndOfLine("\n"))
+                    SyntaxFactory.Token(SyntaxKind.SemicolonToken).WithTrailingTrivia(NewLine)
                 ),
 
             _ => exitStmt
-                .WithLeadingTrivia(SyntaxFactory.EndOfLine("\n"), SyntaxFactory.Whitespace(bodyIndent))
-                .WithTrailingTrivia(SyntaxFactory.EndOfLine("\n")),
+                .WithLeadingTrivia(NewLine, SyntaxFactory.Whitespace(bodyIndent))
+                .WithTrailingTrivia(NewLine),
         };
     }
 
@@ -506,14 +521,14 @@ public sealed class InvertIfToReduceNestingCodeFix : CodeFixProvider
             .WithOpenBraceToken(
                 SyntaxFactory
                     .Token(SyntaxKind.OpenBraceToken)
-                    .WithLeadingTrivia(SyntaxFactory.EndOfLine("\n"), SyntaxFactory.Whitespace(indent))
-                    .WithTrailingTrivia(SyntaxFactory.EndOfLine("\n"))
+                    .WithLeadingTrivia(NewLine, SyntaxFactory.Whitespace(indent))
+                    .WithTrailingTrivia(NewLine)
             )
             .WithCloseBraceToken(
                 SyntaxFactory
                     .Token(SyntaxKind.CloseBraceToken)
                     .WithLeadingTrivia(SyntaxFactory.Whitespace(indent))
-                    .WithTrailingTrivia(SyntaxFactory.EndOfLine("\n"))
+                    .WithTrailingTrivia(NewLine)
             );
     }
 
@@ -528,10 +543,10 @@ public sealed class InvertIfToReduceNestingCodeFix : CodeFixProvider
                 .WithContinueKeyword(
                     SyntaxFactory
                         .Token(SyntaxKind.ContinueKeyword)
-                        .WithLeadingTrivia(SyntaxFactory.EndOfLine("\n"), SyntaxFactory.Whitespace(bodyIndent))
+                        .WithLeadingTrivia(NewLine, SyntaxFactory.Whitespace(bodyIndent))
                 )
                 .WithSemicolonToken(
-                    SyntaxFactory.Token(SyntaxKind.SemicolonToken).WithTrailingTrivia(SyntaxFactory.EndOfLine("\n"))
+                    SyntaxFactory.Token(SyntaxKind.SemicolonToken).WithTrailingTrivia(NewLine)
                 );
         }
 
@@ -540,10 +555,10 @@ public sealed class InvertIfToReduceNestingCodeFix : CodeFixProvider
             .WithReturnKeyword(
                 SyntaxFactory
                     .Token(SyntaxKind.ReturnKeyword)
-                    .WithLeadingTrivia(SyntaxFactory.EndOfLine("\n"), SyntaxFactory.Whitespace(bodyIndent))
+                    .WithLeadingTrivia(NewLine, SyntaxFactory.Whitespace(bodyIndent))
             )
             .WithSemicolonToken(
-                SyntaxFactory.Token(SyntaxKind.SemicolonToken).WithTrailingTrivia(SyntaxFactory.EndOfLine("\n"))
+                SyntaxFactory.Token(SyntaxKind.SemicolonToken).WithTrailingTrivia(NewLine)
             );
     }
 
@@ -595,11 +610,16 @@ public sealed class InvertIfToReduceNestingCodeFix : CodeFixProvider
 
     private static string GetIndentationString(SyntaxNode node)
     {
-        return
-            node.GetLeadingTrivia().Reverse().FirstOrDefault(t => t.IsKind(SyntaxKind.WhitespaceTrivia)) is { } trivia
-            && trivia.IsKind(SyntaxKind.WhitespaceTrivia)
-            ? trivia.ToString()
-            : "";
+        var leadingTrivia = node.GetLeadingTrivia();
+        for (var i = leadingTrivia.Count - 1; i >= 0; i--)
+        {
+            if (leadingTrivia[i].IsKind(SyntaxKind.WhitespaceTrivia))
+            {
+                return leadingTrivia[i].ToString();
+            }
+        }
+
+        return "";
     }
 
     private static ExpressionSyntax NormalizeNegatedCondition(ExpressionSyntax condition)
@@ -840,22 +860,75 @@ public sealed class InvertIfToReduceNestingCodeFix : CodeFixProvider
         return (null, null);
     }
 
+    private static bool HasMemberAccessComparisons(SyntaxNode node)
+    {
+        foreach (var binary in node.DescendantNodes().OfType<BinaryExpressionSyntax>())
+        {
+            if (binary.Kind() is not (SyntaxKind.EqualsExpression or SyntaxKind.NotEqualsExpression))
+            {
+                continue;
+            }
+
+            if (binary.Left is MemberAccessExpressionSyntax { Expression: IdentifierNameSyntax }
+                || binary.Right is MemberAccessExpressionSyntax { Expression: IdentifierNameSyntax })
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static T RewriteComparisons<T>(T node, HashSet<string> knownConstants)
+        where T : SyntaxNode
+    {
+        // Skip the rewriter entirely if no == or != comparisons exist in the output
+        foreach (var descendant in node.DescendantNodes())
+        {
+            if (descendant is BinaryExpressionSyntax b
+                && b.Kind() is SyntaxKind.EqualsExpression or SyntaxKind.NotEqualsExpression)
+            {
+                var rewriter = new ComparisonToPatternRewriter(knownConstants);
+                return (T)rewriter.Visit(node);
+            }
+        }
+
+        return node;
+    }
+
     private static HashSet<string> CollectConstantMemberAccesses(SyntaxNode node, SemanticModel? semanticModel)
     {
         var result = new HashSet<string>();
         if (semanticModel is null)
             return result;
 
-        foreach (var expr in node.DescendantNodes().OfType<MemberAccessExpressionSyntax>())
+        // Only check member accesses that are operands of == or != comparisons,
+        // since the ComparisonToPatternRewriter only rewrites those operators.
+        foreach (var binary in node.DescendantNodes().OfType<BinaryExpressionSyntax>())
         {
-            if (expr.Expression is not IdentifierNameSyntax)
+            if (binary.Kind() is not (SyntaxKind.EqualsExpression or SyntaxKind.NotEqualsExpression))
+            {
                 continue;
+            }
 
-            if (semanticModel.GetConstantValue(expr).HasValue)
-                result.Add(expr.WithoutTrivia().ToFullString());
+            TryAddConstantMemberAccess(binary.Left, semanticModel, result);
+            TryAddConstantMemberAccess(binary.Right, semanticModel, result);
         }
 
         return result;
+    }
+
+    private static void TryAddConstantMemberAccess(
+        ExpressionSyntax expr,
+        SemanticModel semanticModel,
+        HashSet<string> result
+    )
+    {
+        if (expr is MemberAccessExpressionSyntax { Expression: IdentifierNameSyntax } memberAccess
+            && semanticModel.GetConstantValue(memberAccess).HasValue)
+        {
+            result.Add(memberAccess.WithoutTrivia().ToFullString());
+        }
     }
 
     private sealed class ComparisonToPatternRewriter(HashSet<string> knownConstants) : CSharpSyntaxRewriter
