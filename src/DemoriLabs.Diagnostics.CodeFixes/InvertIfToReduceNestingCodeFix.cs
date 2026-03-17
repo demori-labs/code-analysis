@@ -633,9 +633,7 @@ public sealed class InvertIfToReduceNestingCodeFix : CodeFixProvider
             {
                 // x is Type → x is not Type
                 var notPattern = SyntaxFactory.UnaryPattern(
-                    SyntaxFactory
-                        .Token(SyntaxKind.NotKeyword)
-                        .WithTrailingTrivia(SyntaxFactory.Space),
+                    SyntaxFactory.Token(SyntaxKind.NotKeyword).WithTrailingTrivia(SyntaxFactory.Space),
                     SyntaxFactory.TypePattern(typeSyntax.WithoutTrivia())
                 );
                 return SyntaxFactory.IsPatternExpression(
