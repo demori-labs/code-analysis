@@ -189,16 +189,17 @@ public sealed class MultipleEnumerationAnalyzer : DiagnosticAnalyzer
         private void RecordIfCandidate(ExpressionSyntax expression)
         {
             var symbol = model.GetSymbolInfo(expression, ct).Symbol;
-            if (symbol is not null && candidates.Contains(symbol))
-            {
-                if (!_sites.TryGetValue(symbol, out var list))
-                {
-                    list = [];
-                    _sites[symbol] = list;
-                }
 
-                list.Add(expression.GetLocation());
+            if (symbol is null || !candidates.Contains(symbol))
+                return;
+
+            if (!_sites.TryGetValue(symbol, out var list))
+            {
+                list = [];
+                _sites[symbol] = list;
             }
+
+            list.Add(expression.GetLocation());
         }
 
         private static bool IsEnumeratingMethod(IMethodSymbol method)

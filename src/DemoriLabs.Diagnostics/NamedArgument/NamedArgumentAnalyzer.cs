@@ -61,8 +61,7 @@ public sealed class NamedArgumentAnalyzer : DiagnosticAnalyzer
         }
 
         var argumentName = GetArgumentName(argument.Expression);
-        if (argumentName is null
-            || !string.Equals(argumentName, parameter.Name, StringComparison.OrdinalIgnoreCase))
+        if (argumentName is null || !string.Equals(argumentName, parameter.Name, StringComparison.OrdinalIgnoreCase))
         {
             context.ReportDiagnostic(Diagnostic.Create(Rule, argument.GetLocation(), parameter.Name));
         }

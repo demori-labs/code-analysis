@@ -44,12 +44,10 @@ public sealed class RecordPrimaryConstructorTooManyParametersAnalyzer : Diagnost
     {
         var record = (RecordDeclarationSyntax)context.Node;
 
-        if (record.ParameterList is null || record.ParameterList.Parameters.Count == 0)
-        {
+        if (record.ParameterList is not { Parameters.Count: > 0 } parameterList)
             return;
-        }
 
-        var parameterCount = record.ParameterList.Parameters.Count;
+        var parameterCount = parameterList.Parameters.Count;
         var threshold = GetThreshold(context);
 
         if (parameterCount > threshold)

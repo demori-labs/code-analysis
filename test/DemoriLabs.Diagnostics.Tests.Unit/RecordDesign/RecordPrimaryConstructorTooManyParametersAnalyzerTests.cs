@@ -21,13 +21,17 @@ public class RecordPrimaryConstructorTooManyParametersAnalyzerTests
 
         if (threshold.HasValue)
         {
-            test.TestState.AnalyzerConfigFiles.Add(("/.editorconfig",
-                $"""
-                root = true
+            test.TestState.AnalyzerConfigFiles.Add(
+                (
+                    "/.editorconfig",
+                    $"""
+                    root = true
 
-                [*]
-                dotnet_diagnostic.DL1003.positional_parameters_threshold = {threshold.Value}
-                """));
+                    [*]
+                    dotnet_diagnostic.DL1003.positional_parameters_threshold = {threshold.Value}
+                    """
+                )
+            );
         }
 
         return test;

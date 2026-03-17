@@ -61,7 +61,8 @@ public sealed class RecordPrimaryConstructorTooManyParametersCodeFix : CodeFixPr
         var indent = GetIndent(document, record.SyntaxTree);
 
         // Record structs are mutable; readonly record structs and record classes are immutable
-        var isMutableRecordStruct = record.IsKind(SyntaxKind.RecordStructDeclaration)
+        var isMutableRecordStruct =
+            record.IsKind(SyntaxKind.RecordStructDeclaration)
             && !record.Modifiers.Any(m => m.IsKind(SyntaxKind.ReadOnlyKeyword));
         var accessorKind = isMutableRecordStruct
             ? SyntaxKind.SetAccessorDeclaration
@@ -73,14 +74,17 @@ public sealed class RecordPrimaryConstructorTooManyParametersCodeFix : CodeFixPr
         {
             foreach (var member in record.Members)
             {
-                if (member is ConstructorDeclarationSyntax ctor
+                if (
+                    member is ConstructorDeclarationSyntax ctor
                     && ctor.Initializer is { } init
-                    && init.ThisOrBaseKeyword.IsKind(SyntaxKind.ThisKeyword))
+                    && init.ThisOrBaseKeyword.IsKind(SyntaxKind.ThisKeyword)
+                )
                 {
                     var symbol = semanticModel.GetSymbolInfo(init, ct).Symbol as IMethodSymbol;
-                    if (symbol is not null
-                        && !symbol.DeclaringSyntaxReferences.Any(
-                            r => r.GetSyntax(ct) is ConstructorDeclarationSyntax))
+                    if (
+                        symbol is not null
+                        && !symbol.DeclaringSyntaxReferences.Any(r => r.GetSyntax(ct) is ConstructorDeclarationSyntax)
+                    )
                     {
                         primaryCtorChainers.Add(ctor);
                     }
@@ -111,9 +115,15 @@ public sealed class RecordPrimaryConstructorTooManyParametersCodeFix : CodeFixPr
 
             var property = SyntaxFactory
                 .PropertyDeclaration(parameter.Type.WithoutTrivia(), SyntaxFactory.Identifier(propertyName))
-                .AddModifiers(addRequired
-                    ? [SyntaxFactory.Token(SyntaxKind.PublicKeyword), SyntaxFactory.Token(SyntaxKind.RequiredKeyword)]
-                    : [SyntaxFactory.Token(SyntaxKind.PublicKeyword)])
+                .AddModifiers(
+                    addRequired
+                        ?
+                        [
+                            SyntaxFactory.Token(SyntaxKind.PublicKeyword),
+                            SyntaxFactory.Token(SyntaxKind.RequiredKeyword),
+                        ]
+                        : [SyntaxFactory.Token(SyntaxKind.PublicKeyword)]
+                )
                 .AddAccessorListAccessors(
                     SyntaxFactory
                         .AccessorDeclaration(SyntaxKind.GetAccessorDeclaration)
@@ -125,9 +135,9 @@ public sealed class RecordPrimaryConstructorTooManyParametersCodeFix : CodeFixPr
 
             if (hasDefault)
             {
-                property = property.WithInitializer(
-                    SyntaxFactory.EqualsValueClause(parameter.Default!.Value.WithoutTrivia())
-                ).WithSemicolonToken(SyntaxFactory.Token(SyntaxKind.SemicolonToken));
+                property = property
+                    .WithInitializer(SyntaxFactory.EqualsValueClause(parameter.Default!.Value.WithoutTrivia()))
+                    .WithSemicolonToken(SyntaxFactory.Token(SyntaxKind.SemicolonToken));
             }
 
             property = property
@@ -150,15 +160,15 @@ public sealed class RecordPrimaryConstructorTooManyParametersCodeFix : CodeFixPr
             else if (member is ConstructorDeclarationSyntax nonPrimaryCtor && hasChainersToPrimary)
             {
                 // Non-primary-chaining constructor: keep but add blank line separator
-                var kept = nonPrimaryCtor
-                    .WithLeadingTrivia(SyntaxFactory.LineFeed, SyntaxFactory.Whitespace(indent));
+                var kept = nonPrimaryCtor.WithLeadingTrivia(SyntaxFactory.LineFeed, SyntaxFactory.Whitespace(indent));
 
                 if (kept.Body is { Statements.Count: 0 } emptyBody)
                 {
                     kept = kept.WithBody(
                         emptyBody
                             .WithOpenBraceToken(emptyBody.OpenBraceToken.WithTrailingTrivia())
-                            .WithCloseBraceToken(emptyBody.CloseBraceToken.WithLeadingTrivia()));
+                            .WithCloseBraceToken(emptyBody.CloseBraceToken.WithLeadingTrivia())
+                    );
                 }
 
                 rewrittenMembers.Add(kept);
@@ -224,19 +234,23 @@ public sealed class RecordPrimaryConstructorTooManyParametersCodeFix : CodeFixPr
         var newBody = SyntaxFactory
             .Block(allStatements)
             .WithOpenBraceToken(
-                SyntaxFactory.Token(SyntaxKind.OpenBraceToken)
+                SyntaxFactory
+                    .Token(SyntaxKind.OpenBraceToken)
                     .WithLeadingTrivia(SyntaxFactory.LineFeed, SyntaxFactory.Whitespace(indent))
-                    .WithTrailingTrivia(SyntaxFactory.LineFeed))
+                    .WithTrailingTrivia(SyntaxFactory.LineFeed)
+            )
             .WithCloseBraceToken(
-                SyntaxFactory.Token(SyntaxKind.CloseBraceToken)
+                SyntaxFactory
+                    .Token(SyntaxKind.CloseBraceToken)
                     .WithLeadingTrivia(SyntaxFactory.Whitespace(indent))
-                    .WithTrailingTrivia(SyntaxFactory.LineFeed));
+                    .WithTrailingTrivia(SyntaxFactory.LineFeed)
+            );
 
         var cleanParamList = ctor.ParameterList.WithCloseParenToken(
-            ctor.ParameterList.CloseParenToken.WithTrailingTrivia(SyntaxFactory.TriviaList()));
+            ctor.ParameterList.CloseParenToken.WithTrailingTrivia(SyntaxFactory.TriviaList())
+        );
 
-        return ctor
-            .WithParameterList(cleanParamList)
+        return ctor.WithParameterList(cleanParamList)
             .WithInitializer(null)
             .WithBody(newBody)
             .WithSemicolonToken(SyntaxFactory.Token(SyntaxKind.None))
@@ -247,7 +261,8 @@ public sealed class RecordPrimaryConstructorTooManyParametersCodeFix : CodeFixPr
     {
         var options = document.Project.AnalyzerOptions.AnalyzerConfigOptionsProvider.GetOptions(syntaxTree);
 
-        var useTabs = options.TryGetValue("indent_style", out var style)
+        var useTabs =
+            options.TryGetValue("indent_style", out var style)
             && string.Equals(style, "tab", StringComparison.OrdinalIgnoreCase);
 
         if (useTabs)
@@ -255,8 +270,7 @@ public sealed class RecordPrimaryConstructorTooManyParametersCodeFix : CodeFixPr
             return "\t";
         }
 
-        if (options.TryGetValue("indent_size", out var sizeValue)
-            && int.TryParse(sizeValue, out var size))
+        if (options.TryGetValue("indent_size", out var sizeValue) && int.TryParse(sizeValue, out var size))
         {
             return new string(' ', size);
         }

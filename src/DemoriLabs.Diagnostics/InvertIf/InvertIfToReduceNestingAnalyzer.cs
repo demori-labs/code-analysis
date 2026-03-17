@@ -35,95 +35,153 @@ public sealed class InvertIfToReduceNestingAnalyzer : DiagnosticAnalyzer
     {
         var ifStatement = (IfStatementSyntax)context.Node;
 
-        if (ifStatement.Else is not null)
+        if (ifStatement.Statement is not BlockSyntax { Statements.Count: > 0 })
             return;
 
-        if (ifStatement.Statement is not BlockSyntax { Statements.Count: > 0 } block)
+        // Don't flag if this if is part of an else-if chain (the outer if will handle it)
+        if (ifStatement.Parent?.Parent is ElseClauseSyntax)
             return;
 
-        if (ifStatement.Parent is not BlockSyntax parentBlock)
-            return;
+        SyntaxList<StatementSyntax> parentStatements;
+        ExitContext exitContext;
 
-        var ifIndex = parentBlock.Statements.IndexOf(ifStatement);
-        var isLast = ifIndex == parentBlock.Statements.Count - 1;
-        var isSecondToLast = ifIndex == parentBlock.Statements.Count - 2;
-
-        if (isLast)
+        switch (ifStatement.Parent)
         {
-            if (!IsVoidReturningContext(parentBlock, context.SemanticModel, context.CancellationToken))
+            case BlockSyntax parentBlock:
+                parentStatements = parentBlock.Statements;
+                exitContext = GetExitContext(parentBlock, context.SemanticModel, context.CancellationToken);
+                break;
+            case SwitchSectionSyntax switchSection:
+                parentStatements = switchSection.Statements;
+                exitContext = ExitContext.ValueReturn;
+                break;
+            default:
                 return;
         }
-        else if (isSecondToLast
-            && parentBlock.Statements[ifIndex + 1] is ReturnStatementSyntax
-            && block.Statements.Count >= 2)
+
+        if (exitContext is ExitContext.None)
+            return;
+
+        var ifIndex = parentStatements.IndexOf(ifStatement);
+        var isLast = ifIndex == parentStatements.Count - 1;
+        var isSecondToLast = ifIndex == parentStatements.Count - 2;
+
+        if (ifStatement.Else is not null)
         {
-            // If followed by a return and body has multiple statements — worth inverting
+            // If-else: invertible if every terminal branch of the else ends with an exit
+            if (!ElseChainEndsWithExits(ifStatement.Else))
+                return;
         }
         else
         {
-            return;
+            if (isLast)
+            {
+                if (exitContext is not (ExitContext.VoidReturn or ExitContext.Continue))
+                    return;
+            }
+            else if (isSecondToLast && IsExitStatement(parentStatements[ifIndex + 1]))
+            {
+                // If followed by an exit statement — worth inverting
+            }
+            else
+            {
+                return;
+            }
         }
 
         context.ReportDiagnostic(Diagnostic.Create(Rule, ifStatement.IfKeyword.GetLocation()));
     }
 
-    private static bool IsVoidReturningContext(BlockSyntax block, SemanticModel semanticModel, CancellationToken ct)
+    private static bool ElseChainEndsWithExits(ElseClauseSyntax elseClause)
     {
-        return block.Parent switch
+        var elseStatement = elseClause.Statement;
+
+        return elseStatement switch
         {
-            ConstructorDeclarationSyntax => true,
-            DestructorDeclarationSyntax => true,
-            AccessorDeclarationSyntax => true,
-            MethodDeclarationSyntax method => IsVoidOrTaskReturning(method, semanticModel, ct),
-            LocalFunctionStatementSyntax localFunc => IsVoidOrTaskReturning(localFunc, semanticModel, ct),
-            _ => false,
+            BlockSyntax block => block.Statements.Count > 0 && IsExitStatement(block.Statements.Last()),
+            IfStatementSyntax { Statement: BlockSyntax elseIfBlock }
+                when !IsExitStatement(elseIfBlock.Statements.Last()) => false,
+            IfStatementSyntax { Else: not null } elseIf => ElseChainEndsWithExits(elseIf.Else),
+            IfStatementSyntax => true,
+            _ => IsExitStatement(elseStatement),
         };
     }
 
-    private static bool IsVoidOrTaskReturning(
+    private static bool IsExitStatement(StatementSyntax statement)
+    {
+        return statement
+                is ReturnStatementSyntax
+                    or ThrowStatementSyntax
+                    or BreakStatementSyntax
+                    or ContinueStatementSyntax
+            || statement.IsKind(SyntaxKind.YieldBreakStatement);
+    }
+
+    private static ExitContext GetExitContext(BlockSyntax block, SemanticModel semanticModel, CancellationToken ct)
+    {
+        return block.Parent switch
+        {
+            ConstructorDeclarationSyntax => ExitContext.VoidReturn,
+            DestructorDeclarationSyntax => ExitContext.VoidReturn,
+            AccessorDeclarationSyntax => ExitContext.VoidReturn,
+            MethodDeclarationSyntax method => GetMethodExitContext(method, semanticModel, ct),
+            LocalFunctionStatementSyntax localFunc => GetLocalFunctionExitContext(localFunc, semanticModel, ct),
+            ForEachStatementSyntax => ExitContext.Continue,
+            ForStatementSyntax => ExitContext.Continue,
+            WhileStatementSyntax => ExitContext.Continue,
+            DoStatementSyntax => ExitContext.Continue,
+            SimpleLambdaExpressionSyntax => ExitContext.VoidReturn,
+            ParenthesizedLambdaExpressionSyntax => ExitContext.VoidReturn,
+            AnonymousMethodExpressionSyntax => ExitContext.VoidReturn,
+            SwitchSectionSyntax => ExitContext.ValueReturn,
+            _ => ExitContext.None,
+        };
+    }
+
+    private static ExitContext GetMethodExitContext(
         MethodDeclarationSyntax method,
         SemanticModel semanticModel,
         CancellationToken ct
     )
     {
         var symbol = semanticModel.GetDeclaredSymbol(method, ct);
-        return symbol is not null && IsVoidOrTaskReturnType(symbol.ReturnType);
+        if (symbol is null)
+            return ExitContext.None;
+
+        return IsVoidOrTaskReturnType(symbol.ReturnType) ? ExitContext.VoidReturn : ExitContext.ValueReturn;
     }
 
-    private static bool IsVoidOrTaskReturning(
+    private static ExitContext GetLocalFunctionExitContext(
         LocalFunctionStatementSyntax localFunc,
         SemanticModel semanticModel,
         CancellationToken ct
     )
     {
-        var symbol = semanticModel.GetDeclaredSymbol(localFunc, ct) as IMethodSymbol;
-        return symbol is not null && IsVoidOrTaskReturnType(symbol.ReturnType);
+        if (semanticModel.GetDeclaredSymbol(localFunc, ct) is not { } symbol)
+            return ExitContext.None;
+
+        return IsVoidOrTaskReturnType(symbol.ReturnType) ? ExitContext.VoidReturn : ExitContext.ValueReturn;
     }
 
     private static bool IsVoidOrTaskReturnType(ITypeSymbol returnType)
     {
-        if (returnType.SpecialType == SpecialType.System_Void)
+        if (returnType.SpecialType is SpecialType.System_Void)
             return true;
 
-        if (returnType is INamedTypeSymbol { IsGenericType: false } namedType
-            && namedType.Name is "Task" or "ValueTask"
-            && namedType.ContainingNamespace is
+        return returnType
+            is INamedTypeSymbol
             {
-                Name: "Tasks",
+                IsGenericType: false,
+                Name: "Task" or "ValueTask",
                 ContainingNamespace:
                 {
-                    Name: "Threading",
+                    Name: "Tasks",
                     ContainingNamespace:
                     {
-                        Name: "System",
-                        ContainingNamespace.IsGlobalNamespace: true,
+                        Name: "Threading",
+                        ContainingNamespace: { Name: "System", ContainingNamespace.IsGlobalNamespace: true },
                     },
                 },
-            })
-        {
-            return true;
-        }
-
-        return false;
+            };
     }
 }

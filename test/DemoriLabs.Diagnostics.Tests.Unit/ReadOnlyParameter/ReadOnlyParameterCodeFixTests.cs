@@ -10,17 +10,12 @@ namespace DemoriLabs.Diagnostics.Tests.Unit.ReadOnlyParameter;
 // ReSharper disable MemberCanBeMadeStatic.Global
 public class ReadOnlyParameterCodeFixTests
 {
-    private static CSharpCodeFixTest<
-        ReadOnlyParameterAnalyzer,
-        ReadOnlyParameterCodeFix,
-        DefaultVerifier
-    > CreateTest([StringSyntax("C#")] string source, [StringSyntax("C#")] string fixedSource)
+    private static CSharpCodeFixTest<ReadOnlyParameterAnalyzer, ReadOnlyParameterCodeFix, DefaultVerifier> CreateTest(
+        [StringSyntax("C#")] string source,
+        [StringSyntax("C#")] string fixedSource
+    )
     {
-        var test = new CSharpCodeFixTest<
-            ReadOnlyParameterAnalyzer,
-            ReadOnlyParameterCodeFix,
-            DefaultVerifier
-        >
+        var test = new CSharpCodeFixTest<ReadOnlyParameterAnalyzer, ReadOnlyParameterCodeFix, DefaultVerifier>
         {
             TestCode = source,
             FixedCode = fixedSource,

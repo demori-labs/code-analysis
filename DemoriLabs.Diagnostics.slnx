@@ -7,4 +7,7 @@
     <Folder Name="/test/">
         <Project Path="test/DemoriLabs.Diagnostics.Tests.Unit/DemoriLabs.Diagnostics.Tests.Unit.csproj" />
     </Folder>
+    <Folder Name="/bench/">
+        <Project Path="bench/DemoriLabs.Diagnostics.Benchmarks/DemoriLabs.Diagnostics.Benchmarks.csproj" />
+    </Folder>
 </Solution>

@@ -73,10 +73,10 @@ public sealed class ReadOnlyParameterAnalyzer : DiagnosticAnalyzer
             return;
 
         var refKindToken = parameter.Modifiers.FirstOrDefault(m =>
-            m.IsKind(SyntaxKind.RefKeyword) || m.IsKind(SyntaxKind.OutKeyword) || m.IsKind(SyntaxKind.InKeyword)
+            m.Kind() is SyntaxKind.RefKeyword or SyntaxKind.OutKeyword or SyntaxKind.InKeyword
         );
 
-        if (!refKindToken.IsKind(SyntaxKind.None))
+        if (refKindToken.Kind() is not SyntaxKind.None)
         {
             context.ReportDiagnostic(
                 Diagnostic.Create(IncompatibleModifierRule, readOnlyAttr.GetLocation(), refKindToken.ValueText)
@@ -84,15 +84,19 @@ public sealed class ReadOnlyParameterAnalyzer : DiagnosticAnalyzer
             return;
         }
 
-        if (parameter.Parent?.Parent is RecordDeclarationSyntax record
-            && (record.IsKind(SyntaxKind.RecordDeclaration)
-                || record.Modifiers.Any(m => m.IsKind(SyntaxKind.ReadOnlyKeyword))))
+        if (
+            parameter.Parent?.Parent is not RecordDeclarationSyntax record
+            || (
+                record.Kind() is not SyntaxKind.RecordDeclaration
+                && !record.Modifiers.Any(m => m.Kind() is SyntaxKind.ReadOnlyKeyword)
+            )
+        )
         {
-            var kind = record.IsKind(SyntaxKind.RecordDeclaration) ? "record class" : "readonly record struct";
-            context.ReportDiagnostic(
-                Diagnostic.Create(IncompatibleModifierRule, readOnlyAttr.GetLocation(), kind)
-            );
+            return;
         }
+
+        var kind = record.Kind() is SyntaxKind.RecordDeclaration ? "record class" : "readonly record struct";
+        context.ReportDiagnostic(Diagnostic.Create(IncompatibleModifierRule, readOnlyAttr.GetLocation(), kind));
     }
 
     private static AttributeSyntax? FindReadOnlyAttributeSyntax(
@@ -184,10 +188,10 @@ public sealed class ReadOnlyParameterAnalyzer : DiagnosticAnalyzer
 
                 if (syntax is RecordDeclarationSyntax record)
                 {
-                    if (record.IsKind(SyntaxKind.RecordDeclaration))
+                    if (record.Kind() is SyntaxKind.RecordDeclaration)
                         return null;
 
-                    if (record.Modifiers.Any(m => m.IsKind(SyntaxKind.ReadOnlyKeyword)))
+                    if (record.Modifiers.Any(m => m.Kind() is SyntaxKind.ReadOnlyKeyword))
                         return null;
                 }
 

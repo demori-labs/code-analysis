@@ -40,7 +40,7 @@ public sealed class SuggestReadOnlyPrimaryConstructorParameterAnalyzer : Diagnos
 
         if (
             parameter.Modifiers.Any(m =>
-                m.IsKind(SyntaxKind.RefKeyword) || m.IsKind(SyntaxKind.OutKeyword) || m.IsKind(SyntaxKind.InKeyword)
+                m.Kind() is SyntaxKind.RefKeyword or SyntaxKind.OutKeyword or SyntaxKind.InKeyword
             )
         )
         {

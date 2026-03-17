@@ -16,11 +16,7 @@ internal sealed class CognitiveComplexityCalculator : CSharpSyntaxWalker
 
     internal static int Calculate(SyntaxNode body, SemanticModel semanticModel, IMethodSymbol method)
     {
-        var calculator = new CognitiveComplexityCalculator
-        {
-            _semanticModel = semanticModel,
-            _method = method,
-        };
+        var calculator = new CognitiveComplexityCalculator { _semanticModel = semanticModel, _method = method };
         calculator.Visit(body);
         return calculator._complexity;
     }
@@ -152,12 +148,15 @@ internal sealed class CognitiveComplexityCalculator : CSharpSyntaxWalker
 
     public override void VisitInvocationExpression(InvocationExpressionSyntax node)
     {
-        if (!_recursionDetected
+        if (
+            !_recursionDetected
             && _semanticModel is not null
             && _method is not null
             && SymbolEqualityComparer.Default.Equals(
                 _semanticModel.GetSymbolInfo(node).Symbol?.OriginalDefinition,
-                _method.OriginalDefinition))
+                _method.OriginalDefinition
+            )
+        )
         {
             _recursionDetected = true;
             _complexity++;

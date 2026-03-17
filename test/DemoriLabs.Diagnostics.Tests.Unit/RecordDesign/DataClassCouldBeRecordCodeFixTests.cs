@@ -16,11 +16,7 @@ public class DataClassCouldBeRecordCodeFixTests
         DefaultVerifier
     > CreateTest([StringSyntax("C#")] string source, [StringSyntax("C#")] string fixedSource)
     {
-        var test = new CSharpCodeFixTest<
-            DataClassCouldBeRecordAnalyzer,
-            DataClassCouldBeRecordCodeFix,
-            DefaultVerifier
-        >
+        var test = new CSharpCodeFixTest<DataClassCouldBeRecordAnalyzer, DataClassCouldBeRecordCodeFix, DefaultVerifier>
         {
             TestCode = source,
             FixedCode = fixedSource,

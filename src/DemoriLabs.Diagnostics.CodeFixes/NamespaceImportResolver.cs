@@ -6,7 +6,11 @@ namespace DemoriLabs.Diagnostics.CodeFixes;
 
 internal static class NamespaceImportResolver
 {
-    internal static SyntaxNode EnsureUsingDirective(this SyntaxNode root, SemanticModel semanticModel, string namespaceName)
+    internal static SyntaxNode EnsureUsingDirective(
+        this SyntaxNode root,
+        SemanticModel semanticModel,
+        string namespaceName
+    )
     {
         if (root is not CompilationUnitSyntax compilationUnit)
         {
@@ -23,9 +27,11 @@ internal static class NamespaceImportResolver
         var usingDirective = SyntaxFactory
             .UsingDirective(SyntaxFactory.ParseName(namespaceName))
             .NormalizeWhitespace()
-            .WithTrailingTrivia(isFirst
-                ? SyntaxFactory.TriviaList(SyntaxFactory.LineFeed, SyntaxFactory.LineFeed)
-                : SyntaxFactory.TriviaList(SyntaxFactory.LineFeed));
+            .WithTrailingTrivia(
+                isFirst
+                    ? SyntaxFactory.TriviaList(SyntaxFactory.LineFeed, SyntaxFactory.LineFeed)
+                    : SyntaxFactory.TriviaList(SyntaxFactory.LineFeed)
+            );
 
         var newUsings = compilationUnit.Usings.Add(usingDirective);
         return compilationUnit.WithUsings(newUsings);
@@ -37,17 +43,22 @@ internal static class NamespaceImportResolver
         string namespaceName
     )
     {
-        if (compilationUnit.Usings.Any(u =>
-                string.Equals(u.Name?.ToString(), namespaceName, StringComparison.OrdinalIgnoreCase)))
+        if (
+            compilationUnit.Usings.Any(u =>
+                string.Equals(u.Name?.ToString(), namespaceName, StringComparison.OrdinalIgnoreCase)
+            )
+        )
         {
             return true;
         }
 
-        return compilation.SyntaxTrees
-            .Select(tree => tree.GetRoot())
+        return compilation
+            .SyntaxTrees.Select(tree => tree.GetRoot())
             .OfType<CompilationUnitSyntax>()
             .SelectMany(unit => unit.Usings)
-            .Any(u => u.GlobalKeyword.IsKind(SyntaxKind.GlobalKeyword)
-                && string.Equals(u.Name?.ToString(), namespaceName, StringComparison.OrdinalIgnoreCase));
+            .Any(u =>
+                u.GlobalKeyword.IsKind(SyntaxKind.GlobalKeyword)
+                && string.Equals(u.Name?.ToString(), namespaceName, StringComparison.OrdinalIgnoreCase)
+            );
     }
 }

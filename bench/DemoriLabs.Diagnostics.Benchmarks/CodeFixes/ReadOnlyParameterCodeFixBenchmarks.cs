@@ -1,0 +1,100 @@
+using BenchmarkDotNet.Attributes;
+using DemoriLabs.Diagnostics.Attributes;
+using DemoriLabs.Diagnostics.CodeFixes;
+using DemoriLabs.Diagnostics.ReadOnlyParameter;
+using Microsoft.CodeAnalysis;
+
+namespace DemoriLabs.Diagnostics.Benchmarks.CodeFixes;
+
+[MemoryDiagnoser]
+public class ReadOnlyParameterCodeFixBenchmarks
+{
+    private CodeFixRunner _runner = null!;
+    private readonly ReadOnlyParameterCodeFix _codeFix = new();
+
+    [GlobalSetup]
+    public async Task Setup()
+    {
+        _runner = await CodeFixRunner.CreateAsync<ReadOnlyParameterAnalyzer>(
+            """
+            using DemoriLabs.Diagnostics.Attributes;
+
+            public class Calculator
+            {
+                public int Add([ReadOnly] int a, int b)
+                {
+                    a = 10;
+                    return a + b;
+                }
+            }
+            """,
+            MetadataReference.CreateFromFile(typeof(ReadOnlyAttribute).Assembly.Location)
+        );
+    }
+
+    [Benchmark]
+    public async Task<Solution> ApplyFix()
+    {
+        return await _runner.ApplyFixAsync(_codeFix);
+    }
+}
+
+[MemoryDiagnoser]
+public class SuggestReadOnlyPrimaryConstructorParameterCodeFixBenchmarks
+{
+    private CodeFixRunner _runner = null!;
+    private readonly SuggestReadOnlyPrimaryConstructorParameterCodeFix _codeFix = new();
+
+    [GlobalSetup]
+    public async Task Setup()
+    {
+        _runner = await CodeFixRunner.CreateAsync<SuggestReadOnlyPrimaryConstructorParameterAnalyzer>(
+            """
+            using DemoriLabs.Diagnostics.Attributes;
+
+            public class Service(string name)
+            {
+                public string Name => name;
+            }
+            """,
+            MetadataReference.CreateFromFile(typeof(ReadOnlyAttribute).Assembly.Location)
+        );
+    }
+
+    [Benchmark]
+    public async Task<Solution> ApplyFix()
+    {
+        return await _runner.ApplyFixAsync(_codeFix);
+    }
+}
+
+[MemoryDiagnoser]
+public class ReadOnlyIncompatibleModifierCodeFixBenchmarks
+{
+    private CodeFixRunner _runner = null!;
+    private readonly ReadOnlyIncompatibleModifierCodeFix _codeFix = new();
+
+    [GlobalSetup]
+    public async Task Setup()
+    {
+        _runner = await CodeFixRunner.CreateAsync<ReadOnlyParameterAnalyzer>(
+            """
+            using DemoriLabs.Diagnostics.Attributes;
+
+            public class Service
+            {
+                public void Process([ReadOnly] ref int value)
+                {
+                }
+            }
+            """,
+            MetadataReference.CreateFromFile(typeof(ReadOnlyAttribute).Assembly.Location)
+        );
+    }
+
+    [Benchmark]
+    public async Task<Solution> ApplyFix()
+    {
+        return await _runner.ApplyFixAsync(_codeFix);
+    }
+}

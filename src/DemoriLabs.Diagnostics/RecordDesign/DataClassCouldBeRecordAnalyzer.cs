@@ -35,16 +35,17 @@ public sealed class DataClassCouldBeRecordAnalyzer : DiagnosticAnalyzer
     {
         var typeSymbol = (INamedTypeSymbol)context.Symbol;
 
-        if (typeSymbol.TypeKind != TypeKind.Class
+        if (
+            typeSymbol.TypeKind is not TypeKind.Class
             || typeSymbol.IsRecord
             || typeSymbol.IsStatic
-            || typeSymbol.IsAbstract)
+            || typeSymbol.IsAbstract
+        )
         {
             return;
         }
 
-        if (typeSymbol.BaseType is not null
-            && typeSymbol.BaseType.SpecialType != SpecialType.System_Object)
+        if (typeSymbol.BaseType is not null && typeSymbol.BaseType.SpecialType is not SpecialType.System_Object)
         {
             return;
         }
@@ -74,7 +75,6 @@ public sealed class DataClassCouldBeRecordAnalyzer : DiagnosticAnalyzer
                     hasProperties = true;
                     break;
                 case IMethodSymbol method when IsBehaviourMethod(method):
-                    return;
                 case IFieldSymbol:
                 case IEventSymbol:
                     return;
@@ -86,31 +86,23 @@ public sealed class DataClassCouldBeRecordAnalyzer : DiagnosticAnalyzer
             return;
         }
 
-        context.ReportDiagnostic(
-            Diagnostic.Create(
-                Rule,
-                typeSymbol.Locations[0],
-                typeSymbol.Name
-            )
-        );
+        context.ReportDiagnostic(Diagnostic.Create(Rule, typeSymbol.Locations[0], typeSymbol.Name));
     }
 
     private static bool IsBehaviourMethod(IMethodSymbol method)
     {
-        return method.MethodKind switch
-        {
-            MethodKind.Ordinary => true,
-            MethodKind.Conversion => true,
-            MethodKind.Destructor => true,
-            MethodKind.UserDefinedOperator => true,
-            _ => false,
-        };
+        return method.MethodKind
+            is MethodKind.Ordinary
+                or MethodKind.Conversion
+                or MethodKind.Destructor
+                or MethodKind.UserDefinedOperator;
     }
 
     private static bool IsPartialClass(INamedTypeSymbol typeSymbol)
     {
         return typeSymbol.DeclaringSyntaxReferences.Any(r =>
             r.GetSyntax() is ClassDeclarationSyntax classDecl
-            && classDecl.Modifiers.Any(m => m.IsKind(SyntaxKind.PartialKeyword)));
+            && classDecl.Modifiers.Any(m => m.Kind() is SyntaxKind.PartialKeyword)
+        );
     }
 }

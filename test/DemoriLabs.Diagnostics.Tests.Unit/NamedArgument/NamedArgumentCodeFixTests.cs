@@ -9,11 +9,10 @@ namespace DemoriLabs.Diagnostics.Tests.Unit.NamedArgument;
 // ReSharper disable MemberCanBeMadeStatic.Global
 public class NamedArgumentCodeFixTests
 {
-    private static CSharpCodeFixTest<
-        NamedArgumentAnalyzer,
-        NamedArgumentCodeFix,
-        DefaultVerifier
-    > CreateTest([StringSyntax("C#")] string source, [StringSyntax("C#")] string fixedSource)
+    private static CSharpCodeFixTest<NamedArgumentAnalyzer, NamedArgumentCodeFix, DefaultVerifier> CreateTest(
+        [StringSyntax("C#")] string source,
+        [StringSyntax("C#")] string fixedSource
+    )
     {
         return new CSharpCodeFixTest<NamedArgumentAnalyzer, NamedArgumentCodeFix, DefaultVerifier>
         {

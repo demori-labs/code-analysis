@@ -36,7 +36,7 @@ public sealed class RecordsShouldNotHaveMutablePropertiesAnalyzer : DiagnosticAn
         if (!typeSymbol.IsRecord)
             return;
 
-        if (typeSymbol.IsValueType && !typeSymbol.IsReadOnly)
+        if (typeSymbol is { IsValueType: true, IsReadOnly: false })
             return;
 
         if (AnnotationAttributes.HasMutableAttribute(typeSymbol))

@@ -441,11 +441,11 @@ dotnet_diagnostic.IDE0020.severity = error
 # IDE0036: Enforce a consistent order for modifiers (e.g., 'public static').
 dotnet_diagnostic.IDE0036.severity = suggestion
 
-# IDE0038: Use the 'is null' pattern for null checks instead of '== null'.
+# IDE0038: Use pattern matching to avoid 'is' check followed by a cast.
 dotnet_diagnostic.IDE0038.severity = error
 
-# IDE0055: Apply general code formatting fixes based on .editorconfig.
-dotnet_diagnostic.IDE0055.severity = warning
+# IDE0041: Use 'is null' check
+dotnet_diagnostic.IDE0041.severity = warning
 
 # IDE0065: Place 'using' directives inside the namespace declaration.
 dotnet_diagnostic.IDE0065.severity = warning

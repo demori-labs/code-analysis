@@ -46,13 +46,14 @@ internal static class AnnotationAttributes
 
     private static bool IsAnnotationAttribute(AttributeData attribute, string attributeName)
     {
-        var attributeClass = attribute.AttributeClass;
-        if (attributeClass is null)
-        {
+        if (attribute.AttributeClass is not { } attributeClass)
             return false;
-        }
 
         return string.Equals(attributeClass.Name, attributeName, StringComparison.OrdinalIgnoreCase)
-            && string.Equals(attributeClass.ContainingNamespace?.ToDisplayString(), AnnotationNamespace, StringComparison.OrdinalIgnoreCase);
+            && string.Equals(
+                attributeClass.ContainingNamespace?.ToDisplayString(),
+                AnnotationNamespace,
+                StringComparison.OrdinalIgnoreCase
+            );
     }
 }

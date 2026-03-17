@@ -14,8 +14,7 @@ namespace DemoriLabs.Diagnostics.CodeFixes;
 public sealed class DataClassCouldBeRecordCodeFix : CodeFixProvider
 {
     /// <inheritdoc />
-    public override ImmutableArray<string> FixableDiagnosticIds =>
-        [RuleIdentifiers.DataClassCouldBeRecord];
+    public override ImmutableArray<string> FixableDiagnosticIds => [RuleIdentifiers.DataClassCouldBeRecord];
 
     /// <inheritdoc />
     public override FixAllProvider GetFixAllProvider()
@@ -77,8 +76,7 @@ public sealed class DataClassCouldBeRecordCodeFix : CodeFixProvider
             }
         }
 
-        var recordKeyword = SyntaxFactory.Token(SyntaxKind.RecordKeyword)
-            .WithTrailingTrivia(SyntaxFactory.Space);
+        var recordKeyword = SyntaxFactory.Token(SyntaxKind.RecordKeyword).WithTrailingTrivia(SyntaxFactory.Space);
 
         var recordDecl = SyntaxFactory
             .RecordDeclaration(recordKeyword, classDecl.Identifier)
@@ -98,9 +96,7 @@ public sealed class DataClassCouldBeRecordCodeFix : CodeFixProvider
         return document.WithSyntaxRoot(newRoot);
     }
 
-    private static PropertyDeclarationSyntax ConvertPropertyToImmutable(
-        PropertyDeclarationSyntax property
-    )
+    private static PropertyDeclarationSyntax ConvertPropertyToImmutable(PropertyDeclarationSyntax property)
     {
         if (property.AccessorList is null)
         {
@@ -108,10 +104,8 @@ public sealed class DataClassCouldBeRecordCodeFix : CodeFixProvider
         }
 
         var hasDefault = property.Initializer is not null;
-        var hasSetter = property.AccessorList.Accessors.Any(a =>
-            a.IsKind(SyntaxKind.SetAccessorDeclaration));
-        var hasInit = property.AccessorList.Accessors.Any(a =>
-            a.IsKind(SyntaxKind.InitAccessorDeclaration));
+        var hasSetter = property.AccessorList.Accessors.Any(a => a.IsKind(SyntaxKind.SetAccessorDeclaration));
+        var hasInit = property.AccessorList.Accessors.Any(a => a.IsKind(SyntaxKind.InitAccessorDeclaration));
 
         if (!hasSetter && !hasInit)
         {
@@ -142,27 +136,21 @@ public sealed class DataClassCouldBeRecordCodeFix : CodeFixProvider
                 }
             }
 
-            newProperty = newProperty
-                .WithAccessorList(
-                    property.AccessorList.WithAccessors(SyntaxFactory.List(newAccessors)));
+            newProperty = newProperty.WithAccessorList(
+                property.AccessorList.WithAccessors(SyntaxFactory.List(newAccessors))
+            );
         }
 
-        if (!hasDefault && !property.Modifiers.Any(m => m.IsKind(SyntaxKind.RequiredKeyword)))
-        {
-            var requiredToken = SyntaxFactory.Token(SyntaxKind.RequiredKeyword)
-                .WithTrailingTrivia(SyntaxFactory.Space);
+        if (hasDefault || property.Modifiers.Any(m => m.IsKind(SyntaxKind.RequiredKeyword)))
+            return newProperty;
 
-            var publicIndex = newProperty.Modifiers.IndexOf(SyntaxKind.PublicKeyword);
-            if (publicIndex >= 0)
-            {
-                newProperty = newProperty.WithModifiers(
-                    newProperty.Modifiers.Insert(publicIndex + 1, requiredToken));
-            }
-            else
-            {
-                newProperty = newProperty.AddModifiers(requiredToken);
-            }
-        }
+        var requiredToken = SyntaxFactory.Token(SyntaxKind.RequiredKeyword).WithTrailingTrivia(SyntaxFactory.Space);
+
+        var publicIndex = newProperty.Modifiers.IndexOf(SyntaxKind.PublicKeyword);
+        newProperty =
+            publicIndex >= 0
+                ? newProperty.WithModifiers(newProperty.Modifiers.Insert(publicIndex + 1, requiredToken))
+                : newProperty.AddModifiers(requiredToken);
 
         return newProperty;
     }
