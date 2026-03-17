@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+    <ItemGroup>
+        <ProjectReference Include="..\..\src\DemoriLabs.CodeAnalysis\DemoriLabs.CodeAnalysis.csproj" />
+        <ProjectReference Include="..\..\src\DemoriLabs.CodeAnalysis.Attributes\DemoriLabs.CodeAnalysis.Attributes.csproj" />
+        <ProjectReference Include="..\..\src\DemoriLabs.CodeAnalysis.CodeFixes\DemoriLabs.CodeAnalysis.CodeFixes.csproj" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <PackageReference Include="BenchmarkDotNet" />
+        <PackageReference Include="Microsoft.CodeAnalysis.CSharp.Workspaces" />
+    </ItemGroup>
+</Project>

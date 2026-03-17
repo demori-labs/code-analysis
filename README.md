@@ -1,4 +1,4 @@
-# DemoriLabs.Diagnostics
+# DemoriLabs.CodeAnalysis
 
 Roslyn analyzers and code fixes for C#, designed to enforce design patterns, catch common mistakes, and improve code quality.
 
