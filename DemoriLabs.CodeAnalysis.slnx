@@ -1,0 +1,13 @@
+<Solution>
+    <Folder Name="/src/">
+        <Project Path="src/DemoriLabs.CodeAnalysis.Attributes/DemoriLabs.CodeAnalysis.Attributes.csproj" />
+        <Project Path="src/DemoriLabs.CodeAnalysis/DemoriLabs.CodeAnalysis.csproj" />
+        <Project Path="src/DemoriLabs.CodeAnalysis.CodeFixes/DemoriLabs.CodeAnalysis.CodeFixes.csproj" />
+    </Folder>
+    <Folder Name="/test/">
+        <Project Path="test/DemoriLabs.CodeAnalysis.Tests.Unit/DemoriLabs.CodeAnalysis.Tests.Unit.csproj" />
+    </Folder>
+    <Folder Name="/bench/">
+        <Project Path="bench/DemoriLabs.CodeAnalysis.Benchmarks/DemoriLabs.CodeAnalysis.Benchmarks.csproj" />
+    </Folder>
+</Solution>

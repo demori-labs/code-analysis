@@ -1,0 +1,43 @@
+<Project Sdk="Microsoft.NET.Sdk">
+    <PropertyGroup>
+        <TargetFramework>netstandard2.0</TargetFramework>
+        <IncludeBuildOutput>false</IncludeBuildOutput>
+        <developmentDependency>true</developmentDependency>
+        <IsPackable>true</IsPackable>
+        <SuppressDependenciesWhenPacking>true</SuppressDependenciesWhenPacking>
+        <NoWarn>$(NoWarn);NU5128</NoWarn>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <InternalsVisibleTo Include="DemoriLabs.CodeAnalysis.Tests.Unit" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <PackageReference Include="Microsoft.CodeAnalysis.Analyzers">
+            <PrivateAssets>all</PrivateAssets>
+            <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+        </PackageReference>
+        <PackageReference Include="Microsoft.CodeAnalysis.CSharp" PrivateAssets="all" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <None
+            Include="$(OutputPath)\$(AssemblyName).dll"
+            Pack="true"
+            PackagePath="analyzers/dotnet/cs"
+            Visible="false"
+        />
+        <None
+            Include="$(MSBuildProjectDirectory)\..\DemoriLabs.CodeAnalysis.Attributes\bin\$(Configuration)\$(TargetFramework)\DemoriLabs.CodeAnalysis.Attributes.dll"
+            Pack="true"
+            PackagePath="lib/netstandard2.0"
+            Visible="false"
+        />
+        <None
+            Include="$(MSBuildProjectDirectory)\..\DemoriLabs.CodeAnalysis.CodeFixes\bin\$(Configuration)\$(TargetFramework)\DemoriLabs.CodeAnalysis.CodeFixes.dll"
+            Pack="true"
+            PackagePath="analyzers/dotnet/cs"
+            Visible="false"
+        />
+    </ItemGroup>
+</Project>
