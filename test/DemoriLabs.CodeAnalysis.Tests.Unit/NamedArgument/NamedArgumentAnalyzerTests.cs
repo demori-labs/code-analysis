@@ -570,4 +570,71 @@ public class NamedArgumentAnalyzerTests
         test.TestState.AdditionalReferences.Add(typeof(NamedArgumentAttribute).Assembly);
         await test.RunAsync();
     }
+
+    [Test]
+    public async Task NamedArgumentAttribute_RecordPrimaryConstructor_ReportsDiagnostic()
+    {
+        var test = CreateTest(
+            """
+            using DemoriLabs.CodeAnalysis.Attributes;
+
+            public record Person([NamedArgument] string Name, [NamedArgument] int Age);
+
+            public class C
+            {
+                public void M()
+                {
+                    var name = "Alice";
+                    _ = new Person({|DL3001:name|}, {|DL3001:30|});
+                }
+            }
+            """
+        );
+
+        test.TestState.AdditionalReferences.Add(typeof(NamedArgumentAttribute).Assembly);
+        await test.RunAsync();
+    }
+
+    [Test]
+    public async Task NamedArgumentAttribute_RecordPrimaryConstructor_AlreadyNamed_NoDiagnostic()
+    {
+        var test = CreateTest(
+            """
+            using DemoriLabs.CodeAnalysis.Attributes;
+
+            public record Person([NamedArgument] string Name, [NamedArgument] int Age);
+
+            public class C
+            {
+                public void M()
+                {
+                    _ = new Person(Name: "Alice", Age: 30);
+                }
+            }
+            """
+        );
+
+        test.TestState.AdditionalReferences.Add(typeof(NamedArgumentAttribute).Assembly);
+        await test.RunAsync();
+    }
+
+    [Test]
+    public async Task RecordConstructor_LiteralArgument_ReportsDiagnostic()
+    {
+        var test = CreateTest(
+            """
+            public record Person(string Name, int Age);
+
+            public class C
+            {
+                public void M()
+                {
+                    _ = new Person({|DL3001:"Alice"|}, {|DL3001:30|});
+                }
+            }
+            """
+        );
+
+        await test.RunAsync();
+    }
 }

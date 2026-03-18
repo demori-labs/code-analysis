@@ -253,9 +253,7 @@ public sealed class InvertIfToReduceNestingCodeFix : CodeFixProvider
             // Single exit: emit as guard
             var guardBody = BuildGuardFromExit(ifBlock.Statements[0], indent);
             var leading =
-                result.Count > 0
-                    ? SyntaxFactory.TriviaList(NewLine, indentTrivia)
-                    : ifStatement.GetLeadingTrivia();
+                result.Count > 0 ? SyntaxFactory.TriviaList(NewLine, indentTrivia) : ifStatement.GetLeadingTrivia();
             var guard = BuildGuardIf(leading, ifStatement.Condition.WithoutTrivia().NormalizeWhitespace(), guardBody);
             result.Add(guard);
         }
@@ -263,9 +261,7 @@ public sealed class InvertIfToReduceNestingCodeFix : CodeFixProvider
         {
             // Multi-statement body: keep as if-block without else
             var leading =
-                result.Count > 0
-                    ? SyntaxFactory.TriviaList(NewLine, indentTrivia)
-                    : ifStatement.GetLeadingTrivia();
+                result.Count > 0 ? SyntaxFactory.TriviaList(NewLine, indentTrivia) : ifStatement.GetLeadingTrivia();
             var reindentedBlock = ReindentNode(ifBlock, GetIndentationString(ifBlock), indent);
             var newIf = SyntaxFactory.IfStatement(
                 SyntaxFactory
@@ -332,8 +328,7 @@ public sealed class InvertIfToReduceNestingCodeFix : CodeFixProvider
                 var flattened = FlattenIf(lastIf, trailing, exitKind, indent);
                 if (flattened.Count > 0 && statements.Count > 0)
                 {
-                    flattened[0] = flattened[0]
-                        .WithLeadingTrivia(NewLine, SyntaxFactory.Whitespace(indent));
+                    flattened[0] = flattened[0].WithLeadingTrivia(NewLine, SyntaxFactory.Whitespace(indent));
                 }
                 statements.AddRange(flattened);
                 changed = true;
@@ -354,8 +349,7 @@ public sealed class InvertIfToReduceNestingCodeFix : CodeFixProvider
                 var flattened = FlattenIf(secondToLastIf, trailing, exitKind, indent);
                 if (flattened.Count > 0 && statements.Count > 0)
                 {
-                    flattened[0] = flattened[0]
-                        .WithLeadingTrivia(NewLine, SyntaxFactory.Whitespace(indent));
+                    flattened[0] = flattened[0].WithLeadingTrivia(NewLine, SyntaxFactory.Whitespace(indent));
                 }
                 statements.AddRange(flattened);
                 changed = true;
@@ -486,9 +480,7 @@ public sealed class InvertIfToReduceNestingCodeFix : CodeFixProvider
                         .Token(SyntaxKind.ReturnKeyword)
                         .WithLeadingTrivia(NewLine, SyntaxFactory.Whitespace(bodyIndent))
                 )
-                .WithSemicolonToken(
-                    SyntaxFactory.Token(SyntaxKind.SemicolonToken).WithTrailingTrivia(NewLine)
-                ),
+                .WithSemicolonToken(SyntaxFactory.Token(SyntaxKind.SemicolonToken).WithTrailingTrivia(NewLine)),
 
             ThrowStatementSyntax thr => SyntaxFactory
                 .ThrowStatement(thr.Expression?.WithoutTrivia().WithLeadingTrivia(SyntaxFactory.Space))
@@ -497,13 +489,9 @@ public sealed class InvertIfToReduceNestingCodeFix : CodeFixProvider
                         .Token(SyntaxKind.ThrowKeyword)
                         .WithLeadingTrivia(NewLine, SyntaxFactory.Whitespace(bodyIndent))
                 )
-                .WithSemicolonToken(
-                    SyntaxFactory.Token(SyntaxKind.SemicolonToken).WithTrailingTrivia(NewLine)
-                ),
+                .WithSemicolonToken(SyntaxFactory.Token(SyntaxKind.SemicolonToken).WithTrailingTrivia(NewLine)),
 
-            _ => exitStmt
-                .WithLeadingTrivia(NewLine, SyntaxFactory.Whitespace(bodyIndent))
-                .WithTrailingTrivia(NewLine),
+            _ => exitStmt.WithLeadingTrivia(NewLine, SyntaxFactory.Whitespace(bodyIndent)).WithTrailingTrivia(NewLine),
         };
     }
 
@@ -545,9 +533,7 @@ public sealed class InvertIfToReduceNestingCodeFix : CodeFixProvider
                         .Token(SyntaxKind.ContinueKeyword)
                         .WithLeadingTrivia(NewLine, SyntaxFactory.Whitespace(bodyIndent))
                 )
-                .WithSemicolonToken(
-                    SyntaxFactory.Token(SyntaxKind.SemicolonToken).WithTrailingTrivia(NewLine)
-                );
+                .WithSemicolonToken(SyntaxFactory.Token(SyntaxKind.SemicolonToken).WithTrailingTrivia(NewLine));
         }
 
         return SyntaxFactory
@@ -557,9 +543,7 @@ public sealed class InvertIfToReduceNestingCodeFix : CodeFixProvider
                     .Token(SyntaxKind.ReturnKeyword)
                     .WithLeadingTrivia(NewLine, SyntaxFactory.Whitespace(bodyIndent))
             )
-            .WithSemicolonToken(
-                SyntaxFactory.Token(SyntaxKind.SemicolonToken).WithTrailingTrivia(NewLine)
-            );
+            .WithSemicolonToken(SyntaxFactory.Token(SyntaxKind.SemicolonToken).WithTrailingTrivia(NewLine));
     }
 
     private static ExitKind DetermineExitKind(BlockSyntax parentBlock)
@@ -869,8 +853,10 @@ public sealed class InvertIfToReduceNestingCodeFix : CodeFixProvider
                 continue;
             }
 
-            if (binary.Left is MemberAccessExpressionSyntax { Expression: IdentifierNameSyntax }
-                || binary.Right is MemberAccessExpressionSyntax { Expression: IdentifierNameSyntax })
+            if (
+                binary.Left is MemberAccessExpressionSyntax { Expression: IdentifierNameSyntax }
+                || binary.Right is MemberAccessExpressionSyntax { Expression: IdentifierNameSyntax }
+            )
             {
                 return true;
             }
@@ -885,8 +871,10 @@ public sealed class InvertIfToReduceNestingCodeFix : CodeFixProvider
         // Skip the rewriter entirely if no == or != comparisons exist in the output
         foreach (var descendant in node.DescendantNodes())
         {
-            if (descendant is BinaryExpressionSyntax b
-                && b.Kind() is SyntaxKind.EqualsExpression or SyntaxKind.NotEqualsExpression)
+            if (
+                descendant is BinaryExpressionSyntax b
+                && b.Kind() is SyntaxKind.EqualsExpression or SyntaxKind.NotEqualsExpression
+            )
             {
                 var rewriter = new ComparisonToPatternRewriter(knownConstants);
                 return (T)rewriter.Visit(node);
@@ -924,8 +912,10 @@ public sealed class InvertIfToReduceNestingCodeFix : CodeFixProvider
         HashSet<string> result
     )
     {
-        if (expr is MemberAccessExpressionSyntax { Expression: IdentifierNameSyntax } memberAccess
-            && semanticModel.GetConstantValue(memberAccess).HasValue)
+        if (
+            expr is MemberAccessExpressionSyntax { Expression: IdentifierNameSyntax } memberAccess
+            && semanticModel.GetConstantValue(memberAccess).HasValue
+        )
         {
             result.Add(memberAccess.WithoutTrivia().ToFullString());
         }

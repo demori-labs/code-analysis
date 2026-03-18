@@ -1,4 +1,5 @@
 using System.Diagnostics.CodeAnalysis;
+using DemoriLabs.CodeAnalysis.Attributes;
 using DemoriLabs.CodeAnalysis.CodeFixes;
 using DemoriLabs.CodeAnalysis.RecordDesign;
 using Microsoft.CodeAnalysis.CSharp.Testing;
@@ -429,6 +430,92 @@ public class RecordPrimaryConstructorTooManyParametersCodeFixTests
             threshold: 0
         );
 
+        await test.RunAsync();
+    }
+
+    [Test]
+    public async Task Attributes_MigratedToProperties()
+    {
+        var test = CreateTest(
+            """
+            using System.ComponentModel.DataAnnotations;
+
+            public record {|DL1003:Person|}([Required] string FirstName, [Required] string LastName, [Range(0, 150)] int Age);
+            """,
+            """
+            using System.ComponentModel.DataAnnotations;
+
+            public record Person
+            {
+                [Required]
+                public required string FirstName { get; init; }
+                [Required]
+                public required string LastName { get; init; }
+                [Range(0, 150)]
+                public required int Age { get; init; }
+            }
+            """,
+            threshold: 0
+        );
+
+        await test.RunAsync();
+    }
+
+    [Test]
+    public async Task NamedArgumentAttribute_DroppedDuringMigration()
+    {
+        var test = CreateTest(
+            """
+            using DemoriLabs.CodeAnalysis.Attributes;
+
+            public record {|DL1003:Person|}([NamedArgument] string FirstName, [NamedArgument] string LastName, [NamedArgument] int Age);
+            """,
+            """
+            using DemoriLabs.CodeAnalysis.Attributes;
+
+            public record Person
+            {
+                public required string FirstName { get; init; }
+                public required string LastName { get; init; }
+                public required int Age { get; init; }
+            }
+            """,
+            threshold: 0
+        );
+
+        test.TestState.AdditionalReferences.Add(typeof(NamedArgumentAttribute).Assembly);
+        test.FixedState.AdditionalReferences.Add(typeof(NamedArgumentAttribute).Assembly);
+        await test.RunAsync();
+    }
+
+    [Test]
+    public async Task MixedAttributes_OnlyNamedArgumentDropped()
+    {
+        var test = CreateTest(
+            """
+            using System.ComponentModel.DataAnnotations;
+            using DemoriLabs.CodeAnalysis.Attributes;
+
+            public record {|DL1003:Person|}([NamedArgument][Required] string FirstName, [NamedArgument][Required] string LastName, [NamedArgument] int Age);
+            """,
+            """
+            using System.ComponentModel.DataAnnotations;
+            using DemoriLabs.CodeAnalysis.Attributes;
+
+            public record Person
+            {
+                [Required]
+                public required string FirstName { get; init; }
+                [Required]
+                public required string LastName { get; init; }
+                public required int Age { get; init; }
+            }
+            """,
+            threshold: 0
+        );
+
+        test.TestState.AdditionalReferences.Add(typeof(NamedArgumentAttribute).Assembly);
+        test.FixedState.AdditionalReferences.Add(typeof(NamedArgumentAttribute).Assembly);
         await test.RunAsync();
     }
 }

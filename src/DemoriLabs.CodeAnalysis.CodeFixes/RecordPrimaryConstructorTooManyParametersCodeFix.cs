@@ -133,6 +133,11 @@ public sealed class RecordPrimaryConstructorTooManyParametersCodeFix : CodeFixPr
                         .WithSemicolonToken(SyntaxFactory.Token(SyntaxKind.SemicolonToken))
                 );
 
+            // Migrate parameter attributes to the property, skipping parameter-only attributes
+            var attributeLists = FilterAttributeLists(parameter.AttributeLists, semanticModel, ct);
+            if (attributeLists.Count > 0)
+                property = property.WithAttributeLists(attributeLists);
+
             if (hasDefault)
             {
                 property = property
@@ -140,10 +145,38 @@ public sealed class RecordPrimaryConstructorTooManyParametersCodeFix : CodeFixPr
                     .WithSemicolonToken(SyntaxFactory.Token(SyntaxKind.SemicolonToken));
             }
 
-            property = property
-                .NormalizeWhitespace()
-                .WithLeadingTrivia(SyntaxFactory.Whitespace(indent))
-                .WithTrailingTrivia(SyntaxFactory.LineFeed);
+            property = property.NormalizeWhitespace();
+
+            if (property.AttributeLists.Count > 0)
+            {
+                // NormalizeWhitespace produces "[Attr]\r\npublic ..." with no indentation.
+                // We need to indent both the attribute line and the property keyword line,
+                // and normalise line endings to \n.
+                var newAttrLists = new List<AttributeListSyntax>();
+                foreach (var attrList in property.AttributeLists)
+                {
+                    var closeBracket = attrList.CloseBracketToken.WithTrailingTrivia(SyntaxFactory.LineFeed);
+                    newAttrLists.Add(attrList.WithCloseBracketToken(closeBracket));
+                }
+
+                var firstModifier = property.Modifiers.First();
+                property = property
+                    .WithAttributeLists(SyntaxFactory.List(newAttrLists))
+                    .WithLeadingTrivia(SyntaxFactory.Whitespace(indent))
+                    .WithModifiers(
+                        property.Modifiers.Replace(
+                            firstModifier,
+                            firstModifier.WithLeadingTrivia(SyntaxFactory.Whitespace(indent))
+                        )
+                    )
+                    .WithTrailingTrivia(SyntaxFactory.LineFeed);
+            }
+            else
+            {
+                property = property
+                    .WithLeadingTrivia(SyntaxFactory.Whitespace(indent))
+                    .WithTrailingTrivia(SyntaxFactory.LineFeed);
+            }
 
             properties.Add(property);
         }
@@ -276,5 +309,68 @@ public sealed class RecordPrimaryConstructorTooManyParametersCodeFix : CodeFixPr
         }
 
         return "    ";
+    }
+
+    private static SyntaxList<AttributeListSyntax> FilterAttributeLists(
+        SyntaxList<AttributeListSyntax> attributeLists,
+        SemanticModel? semanticModel,
+        CancellationToken ct
+    )
+    {
+        if (attributeLists.Count == 0)
+            return attributeLists;
+
+        var result = new List<AttributeListSyntax>();
+
+        foreach (var attrList in attributeLists)
+        {
+            var kept = new List<AttributeSyntax>();
+
+            foreach (var attr in attrList.Attributes)
+            {
+                if (IsParameterOnlyAttribute(attr, semanticModel, ct))
+                    continue;
+
+                kept.Add(attr.WithoutTrivia());
+            }
+
+            if (kept.Count > 0)
+                result.Add(SyntaxFactory.AttributeList(SyntaxFactory.SeparatedList(kept)));
+        }
+
+        return SyntaxFactory.List(result);
+    }
+
+    private static bool IsParameterOnlyAttribute(
+        AttributeSyntax attribute,
+        SemanticModel? semanticModel,
+        CancellationToken ct
+    )
+    {
+        if (semanticModel is null)
+            return false;
+
+        var symbolInfo = semanticModel.GetSymbolInfo(attribute, ct);
+        var attributeType = (symbolInfo.Symbol as IMethodSymbol)?.ContainingType;
+
+        if (attributeType is null)
+            return false;
+
+        // Check AttributeUsage to see if this attribute can target properties.
+        // If it can only target parameters (and not properties), it should be dropped.
+        var usageAttr = attributeType
+            .GetAttributes()
+            .FirstOrDefault(a =>
+                a.AttributeClass?.Name == "AttributeUsageAttribute"
+                && a.AttributeClass.ContainingNamespace?.ToDisplayString() == "System"
+            );
+
+        if (usageAttr is { ConstructorArguments: { Length: > 0 } args } && args[0].Value is int targets)
+        {
+            var validTargets = (AttributeTargets)targets;
+            return validTargets.HasFlag(AttributeTargets.Parameter) && !validTargets.HasFlag(AttributeTargets.Property);
+        }
+
+        return false;
     }
 }
