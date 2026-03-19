@@ -518,4 +518,194 @@ public class RecordPrimaryConstructorTooManyParametersCodeFixTests
         test.FixedState.AdditionalReferences.Add(typeof(NamedArgumentAttribute).Assembly);
         await test.RunAsync();
     }
+
+    [Test]
+    public async Task CallSite_RewrittenToObjectInitializer()
+    {
+        var test = CreateTest(
+            """
+            public record {|DL1003:Person|}(string FirstName, string LastName, int Age, string Email, string Phone);
+
+            public class C
+            {
+                public void M()
+                {
+                    var p = new Person("Alice", "Smith", 30, "alice@test.com", "123");
+                }
+            }
+            """,
+            """
+            public record Person
+            {
+                public required string FirstName { get; init; }
+                public required string LastName { get; init; }
+                public required int Age { get; init; }
+                public required string Email { get; init; }
+                public required string Phone { get; init; }
+            }
+
+            public class C
+            {
+                public void M()
+                {
+                    var p = new Person
+            {
+                FirstName = "Alice",
+                LastName = "Smith",
+                Age = 30,
+                Email = "alice@test.com",
+                Phone = "123"
+            };
+                }
+            }
+            """
+        );
+
+        await test.RunAsync();
+    }
+
+    [Test]
+    public async Task CallSite_MultipleCallSites_AllRewritten()
+    {
+        var test = CreateTest(
+            """
+            public record {|DL1003:Person|}(string FirstName, string LastName, int Age, string Email, string Phone);
+
+            public class C
+            {
+                public void M()
+                {
+                    var p1 = new Person("Alice", "Smith", 30, "a@test.com", "111");
+                    var p2 = new Person("Bob", "Jones", 25, "b@test.com", "222");
+                }
+            }
+            """,
+            """
+            public record Person
+            {
+                public required string FirstName { get; init; }
+                public required string LastName { get; init; }
+                public required int Age { get; init; }
+                public required string Email { get; init; }
+                public required string Phone { get; init; }
+            }
+
+            public class C
+            {
+                public void M()
+                {
+                    var p1 = new Person
+            {
+                FirstName = "Alice",
+                LastName = "Smith",
+                Age = 30,
+                Email = "a@test.com",
+                Phone = "111"
+            };
+                    var p2 = new Person
+            {
+                FirstName = "Bob",
+                LastName = "Jones",
+                Age = 25,
+                Email = "b@test.com",
+                Phone = "222"
+            };
+                }
+            }
+            """
+        );
+
+        await test.RunAsync();
+    }
+
+    [Test]
+    public async Task CallSite_WithNamedArguments_RewrittenCorrectly()
+    {
+        var test = CreateTest(
+            """
+            public record {|DL1003:Person|}(string FirstName, string LastName, int Age);
+
+            public class C
+            {
+                public void M()
+                {
+                    var p = new Person(FirstName: "Alice", LastName: "Smith", Age: 30);
+                }
+            }
+            """,
+            """
+            public record Person
+            {
+                public required string FirstName { get; init; }
+                public required string LastName { get; init; }
+                public required int Age { get; init; }
+            }
+
+            public class C
+            {
+                public void M()
+                {
+                    var p = new Person
+            {
+                FirstName = "Alice",
+                LastName = "Smith",
+                Age = 30
+            };
+                }
+            }
+            """,
+            threshold: 0
+        );
+
+        await test.RunAsync();
+    }
+
+    [Test]
+    public async Task CallSite_WithVariableArguments_RewrittenCorrectly()
+    {
+        var test = CreateTest(
+            """
+            public record {|DL1003:Person|}(string FirstName, string LastName, int Age, string Email, string Phone);
+
+            public class C
+            {
+                public void M()
+                {
+                    var first = "Alice";
+                    var last = "Smith";
+                    var p = new Person(first, last, 30, "a@test.com", "123");
+                }
+            }
+            """,
+            """
+            public record Person
+            {
+                public required string FirstName { get; init; }
+                public required string LastName { get; init; }
+                public required int Age { get; init; }
+                public required string Email { get; init; }
+                public required string Phone { get; init; }
+            }
+
+            public class C
+            {
+                public void M()
+                {
+                    var first = "Alice";
+                    var last = "Smith";
+                    var p = new Person
+            {
+                FirstName = first,
+                LastName = last,
+                Age = 30,
+                Email = "a@test.com",
+                Phone = "123"
+            };
+                }
+            }
+            """
+        );
+
+        await test.RunAsync();
+    }
 }

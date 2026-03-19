@@ -10,14 +10,32 @@ namespace DemoriLabs.CodeAnalysis.Tests.Unit.NamedArgument;
 public class NamedArgumentAnalyzerTests
 {
     private static CSharpAnalyzerTest<NamedArgumentAnalyzer, DefaultVerifier> CreateTest(
-        [StringSyntax("C#")] string source
+        [StringSyntax("C#")] string source,
+        int? namedArgumentsThreshold = null
     )
     {
-        return new CSharpAnalyzerTest<NamedArgumentAnalyzer, DefaultVerifier>
+        var test = new CSharpAnalyzerTest<NamedArgumentAnalyzer, DefaultVerifier>
         {
             TestCode = source,
             ReferenceAssemblies = ReferenceAssemblies.Net.Net100,
         };
+
+        if (namedArgumentsThreshold.HasValue)
+        {
+            test.TestState.AnalyzerConfigFiles.Add(
+                (
+                    "/.editorconfig",
+                    $"""
+                    root = true
+
+                    [*]
+                    dotnet_diagnostic.DL3001.named_arguments_threshold = {namedArgumentsThreshold.Value}
+                    """
+                )
+            );
+        }
+
+        return test;
     }
 
     [Test]
@@ -630,6 +648,251 @@ public class NamedArgumentAnalyzerTests
                 public void M()
                 {
                     _ = new Person({|DL3001:"Alice"|}, {|DL3001:30|});
+                }
+            }
+            """
+        );
+
+        await test.RunAsync();
+    }
+
+    [Test]
+    public async Task ExpressionTree_LambdaWithLiteral_NoDiagnostic()
+    {
+        var test = CreateTest(
+            """
+            using System;
+            using System.Linq.Expressions;
+
+            public class C
+            {
+                public void M()
+                {
+                    Expression<Func<bool>> expr = () => Foo(true);
+                }
+                private static bool Foo(bool enabled) => enabled;
+            }
+            """
+        );
+
+        await test.RunAsync();
+    }
+
+    [Test]
+    public async Task ExpressionTree_MethodCallInsideLambda_NoDiagnostic()
+    {
+        var test = CreateTest(
+            """
+            using System;
+            using System.Linq.Expressions;
+
+            public class C
+            {
+                public void M()
+                {
+                    Expression<Func<bool>> expr = () => Matches(42);
+                }
+                private static bool Matches(int threshold) => threshold > 0;
+            }
+            """
+        );
+
+        await test.RunAsync();
+    }
+
+    [Test]
+    public async Task ExpressionTree_VariableNameMismatch_NoDiagnostic()
+    {
+        var test = CreateTest(
+            """
+            using System;
+            using System.Linq.Expressions;
+
+            public class C
+            {
+                public void M()
+                {
+                    var total = 5;
+                    Expression<Func<bool>> expr = () => Foo(total);
+                }
+                private static bool Foo(int count) => count > 0;
+            }
+            """
+        );
+
+        await test.RunAsync();
+    }
+
+    [Test]
+    public async Task ExpressionTree_NestedLambda_NoDiagnostic()
+    {
+        var test = CreateTest(
+            """
+            using System;
+            using System.Linq.Expressions;
+
+            public class C
+            {
+                public void M()
+                {
+                    Expression<Func<Func<bool>>> expr = () => () => Foo(true);
+                }
+                private static bool Foo(bool enabled) => enabled;
+            }
+            """
+        );
+
+        await test.RunAsync();
+    }
+
+    [Test]
+    public async Task RegularLambda_LiteralArgument_StillReportsDiagnostic()
+    {
+        var test = CreateTest(
+            """
+            using System;
+
+            public class C
+            {
+                public void M()
+                {
+                    Func<bool> func = () => Foo({|DL3001:true|});
+                }
+                private static bool Foo(bool enabled) => enabled;
+            }
+            """
+        );
+
+        await test.RunAsync();
+    }
+
+    [Test]
+    public async Task Threshold_MethodExceedsDefault_AllArgumentsReportDiagnostic()
+    {
+        var test = CreateTest(
+            """
+            public class C
+            {
+                public void M()
+                {
+                    var name = "Alice";
+                    var age = 30;
+                    var email = "a@b.com";
+                    Foo({|DL3001:name|}, {|DL3001:age|}, {|DL3001:email|});
+                }
+                private static void Foo(string name, int age, string email) { }
+            }
+            """
+        );
+
+        await test.RunAsync();
+    }
+
+    [Test]
+    public async Task Threshold_MethodAtDefault_NoDiagnosticForMatchingNames()
+    {
+        var test = CreateTest(
+            """
+            public class C
+            {
+                public void M()
+                {
+                    var name = "Alice";
+                    var age = 30;
+                    Foo(name, age);
+                }
+                private static void Foo(string name, int age) { }
+            }
+            """
+        );
+
+        await test.RunAsync();
+    }
+
+    [Test]
+    public async Task Threshold_CustomValue_ReportsAboveThreshold()
+    {
+        var test = CreateTest(
+            """
+            public class C
+            {
+                public void M()
+                {
+                    var name = "Alice";
+                    var age = 30;
+                    var email = "a@b.com";
+                    var phone = "123";
+                    Foo({|DL3001:name|}, {|DL3001:age|}, {|DL3001:email|}, {|DL3001:phone|});
+                }
+                private static void Foo(string name, int age, string email, string phone) { }
+            }
+            """,
+            namedArgumentsThreshold: 3
+        );
+
+        await test.RunAsync();
+    }
+
+    [Test]
+    public async Task Threshold_CustomValue_NoDiagnosticAtThreshold()
+    {
+        var test = CreateTest(
+            """
+            public class C
+            {
+                public void M()
+                {
+                    var name = "Alice";
+                    var age = 30;
+                    var email = "a@b.com";
+                    Foo(name, age, email);
+                }
+                private static void Foo(string name, int age, string email) { }
+            }
+            """,
+            namedArgumentsThreshold: 3
+        );
+
+        await test.RunAsync();
+    }
+
+    [Test]
+    public async Task Threshold_AlreadyNamed_NoDiagnostic()
+    {
+        var test = CreateTest(
+            """
+            public class C
+            {
+                public void M()
+                {
+                    Foo(name: "Alice", age: 30, email: "a@b.com");
+                }
+                private static void Foo(string name, int age, string email) { }
+            }
+            """
+        );
+
+        await test.RunAsync();
+    }
+
+    [Test]
+    public async Task Threshold_ExceedsDefault_ConstructorCall_ReportsDiagnostic()
+    {
+        var test = CreateTest(
+            """
+            public class Widget
+            {
+                public Widget(string name, int width, int height) { }
+            }
+
+            public class C
+            {
+                public void M()
+                {
+                    var name = "btn";
+                    var width = 100;
+                    var height = 200;
+                    _ = new Widget({|DL3001:name|}, {|DL3001:width|}, {|DL3001:height|});
                 }
             }
             """

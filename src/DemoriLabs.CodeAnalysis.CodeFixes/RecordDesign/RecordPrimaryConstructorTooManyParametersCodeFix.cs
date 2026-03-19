@@ -5,6 +5,7 @@ using Microsoft.CodeAnalysis.CodeActions;
 using Microsoft.CodeAnalysis.CodeFixes;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
+using Microsoft.CodeAnalysis.FindSymbols;
 
 namespace DemoriLabs.CodeAnalysis.CodeFixes.RecordDesign;
 
@@ -13,6 +14,8 @@ namespace DemoriLabs.CodeAnalysis.CodeFixes.RecordDesign;
 [Shared]
 public sealed class RecordPrimaryConstructorTooManyParametersCodeFix : CodeFixProvider
 {
+    private static readonly SyntaxAnnotation RecordAnnotation = new("RecordToConvert");
+
     /// <inheritdoc />
     public override ImmutableArray<string> FixableDiagnosticIds =>
         [RuleIdentifiers.RecordPrimaryConstructorTooManyParameters];
@@ -47,7 +50,7 @@ public sealed class RecordPrimaryConstructorTooManyParametersCodeFix : CodeFixPr
         );
     }
 
-    private static async Task<Document> ConvertToExplicitPropertiesAsync(
+    private static async Task<Solution> ConvertToExplicitPropertiesAsync(
         Document document,
         RecordDeclarationSyntax record,
         CancellationToken ct
@@ -55,12 +58,255 @@ public sealed class RecordPrimaryConstructorTooManyParametersCodeFix : CodeFixPr
     {
         var root = await document.GetSyntaxRootAsync(ct).ConfigureAwait(false);
         if (root is null || record.ParameterList is null)
-            return document;
+            return document.Project.Solution;
 
         var semanticModel = await document.GetSemanticModelAsync(ct).ConfigureAwait(false);
+        if (semanticModel is null)
+            return document.Project.Solution;
+
+        // Find the primary constructor symbol before any modifications
+        var recordSymbol = semanticModel.GetDeclaredSymbol(record, ct);
+        if (recordSymbol is null)
+            return document.Project.Solution;
+
+        var primaryCtor = FindPrimaryConstructor(recordSymbol, ct);
+
+        // Build parameter-to-property name mapping
+        var parameterNames = new List<string>();
+        var parameterToPropertyMap = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var parameter in record.ParameterList.Parameters)
+        {
+            if (parameter.Type is null)
+                continue;
+
+            var propertyName =
+                char.ToUpperInvariant(parameter.Identifier.Text[0]) + parameter.Identifier.Text.Substring(1);
+            parameterNames.Add(propertyName);
+            parameterToPropertyMap[parameter.Identifier.Text] = propertyName;
+        }
+
+        // Find all references to the primary constructor across the solution
+        var callSitesByDocument = new Dictionary<DocumentId, List<SyntaxNode>>();
+
+        if (primaryCtor is not null)
+        {
+            var solution = document.Project.Solution;
+            var references = await SymbolFinder.FindReferencesAsync(primaryCtor, solution, ct).ConfigureAwait(false);
+
+            foreach (var reference in references)
+            {
+                foreach (var location in reference.Locations)
+                {
+                    if (location.Document.Id == document.Id)
+                    {
+                        // Same document — find the node in current root
+                        var callNode = root.FindNode(location.Location.SourceSpan);
+                        var creation = callNode.FirstAncestorOrSelf<ObjectCreationExpressionSyntax>();
+                        if (creation?.ArgumentList is { Arguments.Count: > 0 })
+                        {
+                            if (!callSitesByDocument.TryGetValue(location.Document.Id, out var list))
+                            {
+                                list = [];
+                                callSitesByDocument[location.Document.Id] = list;
+                            }
+
+                            list.Add(creation);
+                        }
+
+                        continue;
+                    }
+
+                    if (!callSitesByDocument.TryGetValue(location.Document.Id, out var docList))
+                    {
+                        docList = [];
+                        callSitesByDocument[location.Document.Id] = docList;
+                    }
+
+                    var sourceRoot = await location.Location.SourceTree!.GetRootAsync(ct).ConfigureAwait(false);
+                    docList.Add(sourceRoot.FindNode(location.Location.SourceSpan));
+                }
+            }
+        }
+
+        // Annotate the record so we can find it after call-site rewrites in the same document
+        var annotatedRecord = record.WithAdditionalAnnotations(RecordAnnotation);
+        var annotatedRoot = root.ReplaceNode(record, annotatedRecord);
+        var currentSolution = document.Project.Solution.WithDocumentSyntaxRoot(document.Id, annotatedRoot);
+
+        // Rewrite call sites in the same document as the record
+        if (callSitesByDocument.TryGetValue(document.Id, out var sameDocCallSites))
+        {
+            var currentDoc = currentSolution.GetDocument(document.Id)!;
+            var currentRoot = await currentDoc.GetSyntaxRootAsync(ct).ConfigureAwait(false);
+            if (currentRoot is not null)
+            {
+                // Map old nodes to their locations in the annotated root
+                var creationsToRewrite = new List<ObjectCreationExpressionSyntax>();
+                foreach (var oldNode in sameDocCallSites)
+                {
+                    if (oldNode is ObjectCreationExpressionSyntax creation)
+                    {
+                        var nodeInCurrent = currentRoot.FindNode(creation.Span);
+                        var creationInCurrent = nodeInCurrent.FirstAncestorOrSelf<ObjectCreationExpressionSyntax>();
+                        if (creationInCurrent?.ArgumentList is { Arguments.Count: > 0 })
+                            creationsToRewrite.Add(creationInCurrent);
+                    }
+                }
+
+                if (creationsToRewrite.Count > 0)
+                {
+                    var newRoot = currentRoot.ReplaceNodes(
+                        creationsToRewrite,
+                        (original, _) => RewriteCallSite(original, parameterNames, parameterToPropertyMap)
+                    );
+                    currentSolution = currentSolution.WithDocumentSyntaxRoot(document.Id, newRoot);
+                }
+            }
+
+            callSitesByDocument.Remove(document.Id);
+        }
+
+        // Rewrite call sites in other documents
+        foreach (var kvp in callSitesByDocument)
+        {
+            var otherDoc = currentSolution.GetDocument(kvp.Key);
+            if (otherDoc is null)
+                continue;
+
+            var otherRoot = await otherDoc.GetSyntaxRootAsync(ct).ConfigureAwait(false);
+            if (otherRoot is null)
+                continue;
+
+            var creationsToRewrite = kvp
+                .Value.Select(n => n.FirstAncestorOrSelf<ObjectCreationExpressionSyntax>())
+                .Where(c => c?.ArgumentList is { Arguments.Count: > 0 })
+                .Cast<ObjectCreationExpressionSyntax>()
+                .ToList();
+
+            if (creationsToRewrite.Count > 0)
+            {
+                var newRoot = otherRoot.ReplaceNodes(
+                    creationsToRewrite,
+                    (original, _) => RewriteCallSite(original, parameterNames, parameterToPropertyMap)
+                );
+                currentSolution = currentSolution.WithDocumentSyntaxRoot(kvp.Key, newRoot);
+            }
+        }
+
+        // Now apply the record declaration transformation
+        var finalDoc = currentSolution.GetDocument(document.Id)!;
+        var finalRoot = await finalDoc.GetSyntaxRootAsync(ct).ConfigureAwait(false);
+        if (finalRoot is null)
+            return currentSolution;
+
+        var recordToTransform = finalRoot
+            .GetAnnotatedNodes(RecordAnnotation)
+            .OfType<RecordDeclarationSyntax>()
+            .FirstOrDefault();
+
+        if (recordToTransform is null)
+            return currentSolution;
+
+        var finalSemanticModel = await finalDoc.GetSemanticModelAsync(ct).ConfigureAwait(false);
+        if (finalSemanticModel is null)
+            return currentSolution;
+
+        var transformedRoot = RewriteRecordDeclaration(
+            finalRoot,
+            recordToTransform,
+            finalDoc,
+            finalSemanticModel,
+            parameterNames,
+            ct
+        );
+
+        return currentSolution.WithDocumentSyntaxRoot(document.Id, transformedRoot);
+    }
+
+    private static IMethodSymbol? FindPrimaryConstructor(INamedTypeSymbol recordSymbol, CancellationToken ct)
+    {
+        foreach (var ctor in recordSymbol.Constructors)
+        {
+            if (ctor.IsImplicitlyDeclared)
+                continue;
+
+            var isPrimary = ctor.DeclaringSyntaxReferences.All(
+                r => r.GetSyntax(ct) is not ConstructorDeclarationSyntax
+            );
+
+            if (isPrimary)
+                return ctor;
+        }
+
+        return null;
+    }
+
+    private static ExpressionSyntax RewriteCallSite(
+        ObjectCreationExpressionSyntax creation,
+        List<string> parameterNames,
+        Dictionary<string, string> parameterToPropertyMap
+    )
+    {
+        if (creation.ArgumentList is null)
+            return creation;
+
+        var assignments = new List<ExpressionSyntax>();
+        var args = creation.ArgumentList.Arguments;
+
+        for (var i = 0; i < args.Count && i < parameterNames.Count; i++)
+        {
+            var arg = args[i];
+
+            // Determine property name: use named argument mapping or positional index
+            string propertyName;
+            if (arg.NameColon is not null)
+            {
+                var paramName = arg.NameColon.Name.Identifier.Text;
+                propertyName = parameterToPropertyMap.TryGetValue(paramName, out var mapped)
+                    ? mapped
+                    : paramName;
+            }
+            else
+            {
+                propertyName = parameterNames[i];
+            }
+
+            var assignment = SyntaxFactory.AssignmentExpression(
+                SyntaxKind.SimpleAssignmentExpression,
+                SyntaxFactory.IdentifierName(propertyName),
+                arg.Expression.WithoutTrivia()
+            );
+
+            assignments.Add(assignment);
+        }
+
+        var initializer = SyntaxFactory.InitializerExpression(
+            SyntaxKind.ObjectInitializerExpression,
+            SyntaxFactory.SeparatedList(assignments)
+        );
+
+        return creation
+            .WithArgumentList(null)
+            .WithInitializer(initializer)
+            .NormalizeWhitespace(eol: "\n")
+            .WithLeadingTrivia(creation.GetLeadingTrivia())
+            .WithTrailingTrivia(creation.GetTrailingTrivia());
+    }
+
+    private static SyntaxNode RewriteRecordDeclaration(
+        SyntaxNode root,
+        RecordDeclarationSyntax record,
+        Document document,
+        SemanticModel semanticModel,
+        List<string> parameterNames,
+        CancellationToken ct
+    )
+    {
+        if (record.ParameterList is null)
+            return root;
+
         var indent = GetIndent(document, record.SyntaxTree);
 
-        // Record structs are mutable; readonly record structs and record classes are immutable
         var isMutableRecordStruct =
             record.IsKind(SyntaxKind.RecordStructDeclaration)
             && !record.Modifiers.Any(m => m.IsKind(SyntaxKind.ReadOnlyKeyword));
@@ -68,41 +314,31 @@ public sealed class RecordPrimaryConstructorTooManyParametersCodeFix : CodeFixPr
             ? SyntaxKind.SetAccessorDeclaration
             : SyntaxKind.InitAccessorDeclaration;
 
-        // Identify constructors that chain to the primary constructor
         var primaryCtorChainers = new HashSet<ConstructorDeclarationSyntax>();
-        if (semanticModel is not null)
+        foreach (var member in record.Members)
         {
-            foreach (var member in record.Members)
+            if (
+                member is ConstructorDeclarationSyntax { Initializer: { } init } ctor
+                && init.ThisOrBaseKeyword.IsKind(SyntaxKind.ThisKeyword)
+                && semanticModel.GetSymbolInfo(init, ct).Symbol is IMethodSymbol symbol
+                && !symbol.DeclaringSyntaxReferences.Any(r => r.GetSyntax(ct) is ConstructorDeclarationSyntax)
+            )
             {
-                if (
-                    member is ConstructorDeclarationSyntax { Initializer: { } init } ctor
-                    && init.ThisOrBaseKeyword.IsKind(SyntaxKind.ThisKeyword)
-                    && semanticModel.GetSymbolInfo(init, ct).Symbol is IMethodSymbol symbol
-                    && !symbol.DeclaringSyntaxReferences.Any(r => r.GetSyntax(ct) is ConstructorDeclarationSyntax)
-                )
-                {
-                    primaryCtorChainers.Add(ctor);
-                }
+                primaryCtorChainers.Add(ctor);
             }
         }
 
         var hasChainersToPrimary = primaryCtorChainers.Count > 0;
 
-        // Build properties from positional parameters
-        var parameterNames = new List<string>();
         var properties = new List<MemberDeclarationSyntax>();
 
         foreach (var parameter in record.ParameterList.Parameters)
         {
             if (parameter.Type is null)
-            {
                 continue;
-            }
 
             var propertyName =
                 char.ToUpperInvariant(parameter.Identifier.Text[0]) + parameter.Identifier.Text.Substring(1);
-
-            parameterNames.Add(propertyName);
 
             var hasDefault = parameter.Default is not null;
             var addRequired = !hasDefault && !hasChainersToPrimary;
@@ -127,7 +363,6 @@ public sealed class RecordPrimaryConstructorTooManyParametersCodeFix : CodeFixPr
                         .WithSemicolonToken(SyntaxFactory.Token(SyntaxKind.SemicolonToken))
                 );
 
-            // Migrate parameter attributes to the property, skipping parameter-only attributes
             var attributeLists = FilterAttributeLists(parameter.AttributeLists, semanticModel, ct);
             if (attributeLists.Count > 0)
                 property = property.WithAttributeLists(attributeLists);
@@ -143,9 +378,6 @@ public sealed class RecordPrimaryConstructorTooManyParametersCodeFix : CodeFixPr
 
             if (property.AttributeLists.Count > 0)
             {
-                // NormalizeWhitespace produces "[Attr]\r\npublic ..." with no indentation.
-                // We need to indent both the attribute line and the property keyword line,
-                // and normalise line endings to \n.
                 var newAttrLists = new List<AttributeListSyntax>();
                 foreach (var attrList in property.AttributeLists)
                 {
@@ -175,7 +407,6 @@ public sealed class RecordPrimaryConstructorTooManyParametersCodeFix : CodeFixPr
             properties.Add(property);
         }
 
-        // Rewrite constructors that chain to primary; keep others as-is
         var rewrittenMembers = new List<MemberDeclarationSyntax>();
 
         foreach (var member in record.Members)
@@ -187,7 +418,6 @@ public sealed class RecordPrimaryConstructorTooManyParametersCodeFix : CodeFixPr
                     break;
                 case ConstructorDeclarationSyntax nonPrimaryCtor when hasChainersToPrimary:
                 {
-                    // Non-primary-chaining constructor: keep but add blank line separator
                     var kept = nonPrimaryCtor.WithLeadingTrivia(
                         SyntaxFactory.LineFeed,
                         SyntaxFactory.Whitespace(indent)
@@ -227,10 +457,10 @@ public sealed class RecordPrimaryConstructorTooManyParametersCodeFix : CodeFixPr
             .WithOpenBraceToken(openBrace)
             .WithCloseBraceToken(closeBrace)
             .WithSemicolonToken(SyntaxFactory.Token(SyntaxKind.None))
-            .WithMembers(allMembers);
+            .WithMembers(allMembers)
+            .WithoutAnnotations(RecordAnnotation);
 
-        var newRoot = root.ReplaceNode(record, newRecord);
-        return document.WithSyntaxRoot(newRoot);
+        return root.ReplaceNode(record, newRecord);
     }
 
     private static ConstructorDeclarationSyntax RewriteConstructor(
@@ -355,8 +585,6 @@ public sealed class RecordPrimaryConstructorTooManyParametersCodeFix : CodeFixPr
         if (attributeType is null)
             return false;
 
-        // Check AttributeUsage to see if this attribute can target properties.
-        // If it can only target parameters (and not properties), it should be dropped.
         var usageAttr = attributeType
             .GetAttributes()
             .FirstOrDefault(a =>

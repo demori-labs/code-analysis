@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using System.Threading;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
@@ -11,6 +12,11 @@ namespace DemoriLabs.CodeAnalysis.NamedArgument;
 [DiagnosticAnalyzer(LanguageNames.CSharp)]
 public sealed class NamedArgumentAnalyzer : DiagnosticAnalyzer
 {
+    private const int DefaultNamedArgumentsThreshold = 2;
+
+    private const string NamedArgumentsThresholdOptionKey =
+        "dotnet_diagnostic.DL3001.named_arguments_threshold";
+
     private static readonly DiagnosticDescriptor Rule = new(
         RuleIdentifiers.NamedArgument,
         title: "Use named argument",
@@ -29,10 +35,24 @@ public sealed class NamedArgumentAnalyzer : DiagnosticAnalyzer
     {
         context.EnableConcurrentExecution();
         context.ConfigureGeneratedCodeAnalysis(GeneratedCodeAnalysisFlags.None);
-        context.RegisterSyntaxNodeAction(AnalyzeArgument, SyntaxKind.Argument);
+
+        context.RegisterCompilationStartAction(static compilationContext =>
+        {
+            var expressionType = compilationContext.Compilation.GetTypeByMetadataName(
+                "System.Linq.Expressions.Expression`1"
+            );
+
+            compilationContext.RegisterSyntaxNodeAction(
+                analysisContext => AnalyzeArgument(analysisContext, expressionType),
+                SyntaxKind.Argument
+            );
+        });
     }
 
-    private static void AnalyzeArgument(SyntaxNodeAnalysisContext context)
+    private static void AnalyzeArgument(
+        SyntaxNodeAnalysisContext context,
+        INamedTypeSymbol? expressionType
+    )
     {
         var argument = (ArgumentSyntax)context.Node;
 
@@ -43,6 +63,9 @@ public sealed class NamedArgumentAnalyzer : DiagnosticAnalyzer
             return;
 
         if (argument.Parent is BracketedArgumentListSyntax)
+            return;
+
+        if (expressionType is not null && IsInsideExpressionTree(argument, context.SemanticModel, expressionType, context.CancellationToken))
             return;
 
         var operation = context.SemanticModel.GetOperation(argument, context.CancellationToken) as IArgumentOperation;
@@ -60,11 +83,35 @@ public sealed class NamedArgumentAnalyzer : DiagnosticAnalyzer
             return;
         }
 
+        var minParameterCount = GetNamedArgumentsThreshold(context);
+
+        if (parameter.ContainingSymbol is IMethodSymbol method
+            && method.Parameters.Length > minParameterCount)
+        {
+            context.ReportDiagnostic(Diagnostic.Create(Rule, argument.GetLocation(), parameter.Name));
+            return;
+        }
+
         var argumentName = GetArgumentName(argument.Expression);
         if (argumentName is null || !string.Equals(argumentName, parameter.Name, StringComparison.OrdinalIgnoreCase))
         {
             context.ReportDiagnostic(Diagnostic.Create(Rule, argument.GetLocation(), parameter.Name));
         }
+    }
+
+    private static int GetNamedArgumentsThreshold(SyntaxNodeAnalysisContext context)
+    {
+        var options = context.Options.AnalyzerConfigOptionsProvider.GetOptions(context.Node.SyntaxTree);
+
+        if (
+            options.TryGetValue(NamedArgumentsThresholdOptionKey, out var value)
+            && int.TryParse(value, out var parsed)
+        )
+        {
+            return parsed;
+        }
+
+        return DefaultNamedArgumentsThreshold;
     }
 
     private static string? GetArgumentName(ExpressionSyntax expression)
@@ -89,5 +136,30 @@ public sealed class NamedArgumentAnalyzer : DiagnosticAnalyzer
                 or SyntaxKind.StringLiteralExpression
                 or SyntaxKind.CharacterLiteralExpression
                 or SyntaxKind.DefaultLiteralExpression;
+    }
+
+    private static bool IsInsideExpressionTree(
+        SyntaxNode node,
+        SemanticModel semanticModel,
+        INamedTypeSymbol expressionType,
+        CancellationToken cancellationToken
+    )
+    {
+        for (var current = node.Parent; current is not null; current = current.Parent)
+        {
+            if (current is not LambdaExpressionSyntax and not AnonymousMethodExpressionSyntax)
+                continue;
+
+            var typeInfo = semanticModel.GetTypeInfo(current, cancellationToken);
+            var convertedType = typeInfo.ConvertedType?.OriginalDefinition;
+
+            if (convertedType is not null
+                && SymbolEqualityComparer.Default.Equals(convertedType, expressionType))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 }

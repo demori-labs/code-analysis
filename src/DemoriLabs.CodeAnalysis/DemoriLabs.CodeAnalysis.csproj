@@ -55,5 +55,11 @@
             PackagePath="analyzers/dotnet/cs"
             Visible="false"
         />
+        <None
+            Include="buildTransitive\DemoriLabs.CodeAnalysis.props"
+            Pack="true"
+            PackagePath="buildTransitive"
+            Visible="false"
+        />
     </ItemGroup>
 </Project>

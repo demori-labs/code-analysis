@@ -1,0 +1,9 @@
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+    <ItemGroup>
+        <Reference
+            Include="DemoriLabs.CodeAnalysis.Attributes"
+            HintPath="$(MSBuildThisFileDirectory)../lib/netstandard2.0/DemoriLabs.CodeAnalysis.Attributes.dll"
+            Visible="false"
+        />
+    </ItemGroup>
+</Project>
