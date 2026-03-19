@@ -939,6 +939,69 @@ public class NamedArgumentAnalyzerTests
     }
 
     [Test]
+    public async Task ParamsMethod_ParamsNotCounted_NoDiagnostic()
+    {
+        var test = CreateTest(
+            """
+            public static class Logger
+            {
+                public static void LogDebug(this object logger, string? message, params object?[] args) { }
+            }
+
+            public class C
+            {
+                private readonly object _logger = new();
+
+                public void M()
+                {
+                    _logger.LogDebug("Start processing message: {Message}", "test");
+                }
+            }
+            """
+        );
+
+        await test.RunAsync();
+    }
+
+    [Test]
+    public async Task ParamsMethod_OnlyRegularParamsCounted()
+    {
+        var test = CreateTest(
+            """
+            public class C
+            {
+                public void M()
+                {
+                    Foo("format", "a", "b", "c");
+                }
+                private static void Foo(string format, params object[] args) { }
+            }
+            """
+        );
+
+        await test.RunAsync();
+    }
+
+    [Test]
+    public async Task OutParam_NotCounted()
+    {
+        var test = CreateTest(
+            """
+            public class C
+            {
+                public void M()
+                {
+                    Parse("123", "en", out var result);
+                }
+                private static bool Parse(string input, string culture, out int result) { result = 0; return true; }
+            }
+            """
+        );
+
+        await test.RunAsync();
+    }
+
+    [Test]
     public async Task ExpressionTree_LambdaWithLiteral_NoDiagnostic()
     {
         var test = CreateTest(

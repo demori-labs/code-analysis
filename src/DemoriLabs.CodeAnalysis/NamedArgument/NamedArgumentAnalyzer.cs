@@ -88,9 +88,7 @@ public sealed class NamedArgumentAnalyzer : DiagnosticAnalyzer
         // Rule 2: Methods exceeding the threshold require naming for non-matching arguments
         if (parameter.ContainingSymbol is IMethodSymbol method)
         {
-            var visibleParameterCount = method.IsExtensionMethod
-                ? method.Parameters.Length - 1
-                : method.Parameters.Length;
+            var visibleParameterCount = CountVisibleParameters(method);
 
             var namedArgumentsThreshold = GetNamedArgumentsThreshold(context);
 
@@ -118,6 +116,27 @@ public sealed class NamedArgumentAnalyzer : DiagnosticAnalyzer
         };
 
         return name?.TrimStart('_');
+    }
+
+    private static int CountVisibleParameters(IMethodSymbol method)
+    {
+        var count = 0;
+
+        foreach (var param in method.Parameters)
+        {
+            if (param.IsParams)
+                continue;
+
+            if (param.RefKind is not RefKind.None)
+                continue;
+
+            count++;
+        }
+
+        if (method.IsExtensionMethod && count > 0)
+            count--;
+
+        return count;
     }
 
     private static int GetNamedArgumentsThreshold(SyntaxNodeAnalysisContext context)
