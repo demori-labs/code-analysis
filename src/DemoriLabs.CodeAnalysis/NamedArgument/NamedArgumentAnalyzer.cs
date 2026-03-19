@@ -95,10 +95,7 @@ public sealed class NamedArgumentAnalyzer : DiagnosticAnalyzer
             if (visibleParameterCount > namedArgumentsThreshold)
             {
                 var argumentName = GetArgumentName(argument.Expression);
-                if (
-                    argumentName is null
-                    || !string.Equals(argumentName, parameter.Name, StringComparison.OrdinalIgnoreCase)
-                )
+                if (argumentName is null || !NameMatches(argumentName, parameter))
                 {
                     context.ReportDiagnostic(Diagnostic.Create(Rule, argument.GetLocation(), parameter.Name));
                 }
@@ -118,6 +115,27 @@ public sealed class NamedArgumentAnalyzer : DiagnosticAnalyzer
         return name?.TrimStart('_');
     }
 
+    private static bool NameMatches(string argumentName, IParameterSymbol parameter)
+    {
+        var parameterName = parameter.Name;
+
+        if (string.Equals(argumentName, parameterName, StringComparison.OrdinalIgnoreCase))
+            return true;
+
+        if (
+            parameterName.StartsWith(argumentName, StringComparison.OrdinalIgnoreCase)
+            && parameterName.Length > argumentName.Length
+            && char.IsUpper(parameterName[argumentName.Length])
+        )
+        {
+            var suffix = parameterName.Substring(argumentName.Length);
+            var typeName = parameter.Type.Name;
+            return string.Equals(suffix, typeName, StringComparison.OrdinalIgnoreCase);
+        }
+
+        return false;
+    }
+
     private static int CountVisibleParameters(IMethodSymbol method)
     {
         var count = 0;
@@ -128,6 +146,9 @@ public sealed class NamedArgumentAnalyzer : DiagnosticAnalyzer
                 continue;
 
             if (param.RefKind is not RefKind.None)
+                continue;
+
+            if (param.HasExplicitDefaultValue)
                 continue;
 
             count++;

@@ -1002,6 +1002,125 @@ public class NamedArgumentAnalyzerTests
     }
 
     [Test]
+    public async Task OptionalParams_NotCounted_NoDiagnostic()
+    {
+        var test = CreateTest(
+            """
+            using System;
+
+            public static class ServiceCollectionExtensions
+            {
+                public static void AddDbContext<T>(
+                    this object services,
+                    Action<object>? optionsAction = null,
+                    int contextLifetime = 0,
+                    int optionsLifetime = 0) { }
+            }
+
+            public class C
+            {
+                public void M()
+                {
+                    var services = new object();
+                    services.AddDbContext<object>(options => { });
+                }
+            }
+            """
+        );
+
+        await test.RunAsync();
+    }
+
+    [Test]
+    public async Task OptionalParams_ExplicitlyPassed_AboveThreshold_ReportsMismatch()
+    {
+        var test = CreateTest(
+            """
+            public class C
+            {
+                public void M()
+                {
+                    Foo({|DL3001:"hello"|}, {|DL3001:99|}, {|DL3001:"a@b.com"|}, {|DL3001:5|});
+                }
+                private static void Foo(string name, int age, string email, int limit = 10) { }
+            }
+            """
+        );
+
+        await test.RunAsync();
+    }
+
+    [Test]
+    public async Task ArgumentName_PrefixMatchesWithTypeSuffix_NoDiagnostic()
+    {
+        var test = CreateTest(
+            """
+            using System;
+
+            public class C
+            {
+                public void M()
+                {
+                    Action<string> options = _ => { };
+                    Func<int> count = () => 0;
+                    var name = "test";
+                    Foo(options, count, name);
+                }
+                private static void Foo(Action<string> optionsAction, Func<int> countFunc, string name) { }
+            }
+            """
+        );
+
+        await test.RunAsync();
+    }
+
+    [Test]
+    public async Task ArgumentName_PrefixDoesNotMatchType_ReportsDiagnostic()
+    {
+        var test = CreateTest(
+            """
+            using System;
+
+            public class C
+            {
+                public void M()
+                {
+                    Action<string> options = _ => { };
+                    var count = 5;
+                    var name = "test";
+                    Foo(options, {|DL3001:count|}, name);
+                }
+                private static void Foo(Action<string> optionsAction, int countThreshold, string name) { }
+            }
+            """
+        );
+
+        await test.RunAsync();
+    }
+
+    [Test]
+    public async Task ArgumentName_NoMatch_ReportsDiagnostic()
+    {
+        var test = CreateTest(
+            """
+            public class C
+            {
+                public void M()
+                {
+                    var cfg = new object();
+                    var n = "test";
+                    var x = 5;
+                    Foo({|DL3001:cfg|}, {|DL3001:n|}, {|DL3001:x|});
+                }
+                private static void Foo(object value, string name, int count) { }
+            }
+            """
+        );
+
+        await test.RunAsync();
+    }
+
+    [Test]
     public async Task ExpressionTree_LambdaWithLiteral_NoDiagnostic()
     {
         var test = CreateTest(
