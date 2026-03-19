@@ -35,6 +35,8 @@
     </ItemGroup>
 
     <ItemGroup>
+        <None Include="$(RootDir)docs\static\icon.png" Pack="true" PackagePath="" Visible="false" />
+        <None Include="$(RootDir)README.md" Pack="true" PackagePath="" Visible="false" />
         <None
             Include="$(OutputPath)\$(AssemblyName).dll"
             Pack="true"
@@ -42,13 +44,13 @@
             Visible="false"
         />
         <None
-            Include="$(MSBuildProjectDirectory)\..\DemoriLabs.CodeAnalysis.Attributes\bin\$(Configuration)\$(TargetFramework)\DemoriLabs.CodeAnalysis.Attributes.dll"
+            Include="$(ArtifactsPath)\bin\DemoriLabs.CodeAnalysis.Attributes\$(Configuration.ToLowerInvariant())\DemoriLabs.CodeAnalysis.Attributes.dll"
             Pack="true"
             PackagePath="lib/netstandard2.0"
             Visible="false"
         />
         <None
-            Include="$(MSBuildProjectDirectory)\..\DemoriLabs.CodeAnalysis.CodeFixes\bin\$(Configuration)\$(TargetFramework)\DemoriLabs.CodeAnalysis.CodeFixes.dll"
+            Include="$(ArtifactsPath)\bin\DemoriLabs.CodeAnalysis.CodeFixes\$(Configuration.ToLowerInvariant())\DemoriLabs.CodeAnalysis.CodeFixes.dll"
             Pack="true"
             PackagePath="analyzers/dotnet/cs"
             Visible="false"
