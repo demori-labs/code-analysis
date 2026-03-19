@@ -15,7 +15,7 @@ public sealed class InvertIfToReduceNestingAnalyzer : DiagnosticAnalyzer
         title: "Invert 'if' statement to reduce nesting",
         messageFormat: "Invert 'if' statement to reduce nesting",
         RuleCategories.Style,
-        DiagnosticSeverity.Info,
+        DiagnosticSeverity.Warning,
         isEnabledByDefault: true,
         description: "An 'if' statement that wraps the remaining body of a method can be inverted to an early return, reducing nesting depth."
     );

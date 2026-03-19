@@ -15,7 +15,7 @@ public sealed class SuggestReadOnlyPrimaryConstructorParameterAnalyzer : Diagnos
         title: "Primary constructor parameter should be [ReadOnly]",
         messageFormat: "Consider adding [ReadOnly] to primary constructor parameter '{0}'",
         RuleCategories.Usage,
-        DiagnosticSeverity.Info,
+        DiagnosticSeverity.Warning,
         isEnabledByDefault: true,
         description: "Primary constructor parameters on classes should be marked with [ReadOnly] to prevent accidental reassignment."
     );

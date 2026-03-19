@@ -15,7 +15,7 @@ public sealed class UsePrimaryConstructorAnalyzer : DiagnosticAnalyzer
         title: "Type can use a primary constructor",
         messageFormat: "Constructor of '{0}' can be converted to a primary constructor",
         RuleCategories.Design,
-        DiagnosticSeverity.Info,
+        DiagnosticSeverity.Warning,
         isEnabledByDefault: true,
         description: "Types with a single constructor that only assigns parameters to readonly fields can use a primary constructor for more concise syntax."
     );
