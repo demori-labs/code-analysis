@@ -1,5 +1,6 @@
 namespace DemoriLabs.CodeAnalysis.Tests.Unit.InvertIf;
 
+// ReSharper disable MemberCanBeMadeStatic.Global
 public partial class InvertIfToReduceNestingCodeFixTests
 {
     [Test]

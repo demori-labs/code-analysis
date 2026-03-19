@@ -29,7 +29,7 @@ internal sealed class CodeFixRunner
 
         var references = ((string)AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES")!)
             .Split(Path.PathSeparator)
-            .Select(path => (MetadataReference)MetadataReference.CreateFromFile(path))
+            .Select(MetadataReference (path) => MetadataReference.CreateFromFile(path))
             .ToList();
 
         references.AddRange(additionalReferences);

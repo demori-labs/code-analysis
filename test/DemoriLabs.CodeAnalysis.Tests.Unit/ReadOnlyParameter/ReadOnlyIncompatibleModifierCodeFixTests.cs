@@ -1,6 +1,6 @@
 using System.Diagnostics.CodeAnalysis;
 using DemoriLabs.CodeAnalysis.Attributes;
-using DemoriLabs.CodeAnalysis.CodeFixes;
+using DemoriLabs.CodeAnalysis.CodeFixes.ReadOnlyParameter;
 using DemoriLabs.CodeAnalysis.ReadOnlyParameter;
 using Microsoft.CodeAnalysis.CSharp.Testing;
 using Microsoft.CodeAnalysis.Testing;

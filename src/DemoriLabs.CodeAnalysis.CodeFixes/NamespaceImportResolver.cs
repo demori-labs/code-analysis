@@ -12,12 +12,10 @@ internal static class NamespaceImportResolver
         string namespaceName
     )
     {
-        if (root is not CompilationUnitSyntax compilationUnit)
-        {
-            return root;
-        }
-
-        if (IsNamespaceImported(compilationUnit, semanticModel.Compilation, namespaceName))
+        if (
+            root is not CompilationUnitSyntax compilationUnit
+            || IsNamespaceImported(compilationUnit, semanticModel.Compilation, namespaceName)
+        )
         {
             return root;
         }

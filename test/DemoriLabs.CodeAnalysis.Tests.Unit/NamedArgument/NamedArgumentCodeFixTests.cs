@@ -1,5 +1,5 @@
 using System.Diagnostics.CodeAnalysis;
-using DemoriLabs.CodeAnalysis.CodeFixes;
+using DemoriLabs.CodeAnalysis.CodeFixes.NamedArgument;
 using DemoriLabs.CodeAnalysis.NamedArgument;
 using Microsoft.CodeAnalysis.CSharp.Testing;
 using Microsoft.CodeAnalysis.Testing;

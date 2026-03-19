@@ -174,24 +174,22 @@ public sealed class InvertIfToReduceNestingAnalyzer : DiagnosticAnalyzer
         CancellationToken ct
     )
     {
-        // Fast syntactic check: void and other predefined types
-        if (localFunc.ReturnType is PredefinedTypeSyntax predefined)
+        switch (localFunc.ReturnType)
         {
-            return predefined.Keyword.IsKind(SyntaxKind.VoidKeyword) ? ExitContext.VoidReturn : ExitContext.ValueReturn;
-        }
+            // Fast syntactic check: void and other predefined types
+            case PredefinedTypeSyntax predefined:
+                return predefined.Keyword.IsKind(SyntaxKind.VoidKeyword)
+                    ? ExitContext.VoidReturn
+                    : ExitContext.ValueReturn;
 
-        // Fast syntactic check: types that can never be non-generic Task/ValueTask
-        if (
-            localFunc.ReturnType
-            is GenericNameSyntax
-                or ArrayTypeSyntax
-                or TupleTypeSyntax
-                or NullableTypeSyntax
-                or PointerTypeSyntax
-                or RefTypeSyntax
-        )
-        {
-            return ExitContext.ValueReturn;
+            // Fast syntactic check: types that can never be non-generic Task/ValueTask
+            case GenericNameSyntax
+            or ArrayTypeSyntax
+            or TupleTypeSyntax
+            or NullableTypeSyntax
+            or PointerTypeSyntax
+            or RefTypeSyntax:
+                return ExitContext.ValueReturn;
         }
 
         // Slow path: could be Task, ValueTask, or other — need semantic model

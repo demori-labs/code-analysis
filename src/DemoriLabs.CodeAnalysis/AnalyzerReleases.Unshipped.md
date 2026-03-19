@@ -9,6 +9,7 @@ DL1001 | Design | Warning | RecordsShouldNotHaveMutablePropertiesAnalyzer
 DL1002 | Design | Warning | RecordsShouldNotHaveMutablePropertyTypesAnalyzer
 DL1003 | Design | Warning | RecordPrimaryConstructorTooManyParametersAnalyzer
 DL1004 | Design | Info | DataClassCouldBeRecordAnalyzer
+DL1005 | Design | Info | UsePrimaryConstructorAnalyzer
 DL2001 | Usage | Error | ReadOnlyParameterAnalyzer
 DL2002 | Usage | Error | ReadOnlyParameterAnalyzer
 DL2003 | Usage | Info | SuggestReadOnlyPrimaryConstructorParameterAnalyzer

@@ -10,7 +10,7 @@ namespace DemoriLabs.CodeAnalysis.RecordDesign;
 [DiagnosticAnalyzer(LanguageNames.CSharp)]
 public sealed class DataClassCouldBeRecordAnalyzer : DiagnosticAnalyzer
 {
-    internal static readonly DiagnosticDescriptor Rule = new(
+    private static readonly DiagnosticDescriptor Rule = new(
         RuleIdentifiers.DataClassCouldBeRecord,
         title: "Data class could be a record",
         messageFormat: "Class '{0}' only defines data members and could be converted to a record with immutable properties",

@@ -8,6 +8,16 @@
         <NoWarn>$(NoWarn);NU5128</NoWarn>
     </PropertyGroup>
 
+    <PropertyGroup>
+        <PackageId>DemoriLabs.CodeAnalysis</PackageId>
+        <PackageTags>Roslyn; Analyzer; CodeFix; CSharp; CodeAnalysis; Diagnostics; Linting;</PackageTags>
+        <PackageProjectUrl>https://github.com/demori-labs/code-analysis</PackageProjectUrl>
+        <PackageReleaseNotes>https://github.com/demori-labs/code-analysis</PackageReleaseNotes>
+        <RepositoryUrl>https://github.com/demori-labs/code-analysis</RepositoryUrl>
+        <RoslynAnalyzer>true</RoslynAnalyzer>
+        <SkipAnalyzers>true</SkipAnalyzers>
+    </PropertyGroup>
+
     <ItemGroup>
         <InternalsVisibleTo Include="DemoriLabs.CodeAnalysis.Tests.Unit" />
     </ItemGroup>
@@ -18,6 +28,10 @@
             <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
         </PackageReference>
         <PackageReference Include="Microsoft.CodeAnalysis.CSharp" PrivateAssets="all" />
+        <PackageReference Include="Nerdbank.GitVersioning">
+            <PrivateAssets>all</PrivateAssets>
+            <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+        </PackageReference>
     </ItemGroup>
 
     <ItemGroup>
