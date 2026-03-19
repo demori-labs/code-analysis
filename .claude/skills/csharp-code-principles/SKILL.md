@@ -124,3 +124,5 @@ Follow [Microsoft's best practices for comparing strings](https://learn.microsof
 - Use `const` or `static readonly` for values known at compile time
 - Always use `var` for local variable declarations
 - Use `sealed` on classes not designed for inheritance
+- **No comments** — code should be self-explanatory. If logic is unclear, refactor rather than comment
+- **No `#region` blocks** — they hide code and discourage cohesion

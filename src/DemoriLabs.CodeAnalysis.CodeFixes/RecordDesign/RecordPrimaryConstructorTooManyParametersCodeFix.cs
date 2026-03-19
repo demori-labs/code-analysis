@@ -230,8 +230,8 @@ public sealed class RecordPrimaryConstructorTooManyParametersCodeFix : CodeFixPr
             if (ctor.IsImplicitlyDeclared)
                 continue;
 
-            var isPrimary = ctor.DeclaringSyntaxReferences.All(
-                r => r.GetSyntax(ct) is not ConstructorDeclarationSyntax
+            var isPrimary = ctor.DeclaringSyntaxReferences.All(r =>
+                r.GetSyntax(ct) is not ConstructorDeclarationSyntax
             );
 
             if (isPrimary)
@@ -262,9 +262,7 @@ public sealed class RecordPrimaryConstructorTooManyParametersCodeFix : CodeFixPr
             if (arg.NameColon is not null)
             {
                 var paramName = arg.NameColon.Name.Identifier.Text;
-                propertyName = parameterToPropertyMap.TryGetValue(paramName, out var mapped)
-                    ? mapped
-                    : paramName;
+                propertyName = parameterToPropertyMap.TryGetValue(paramName, out var mapped) ? mapped : paramName;
             }
             else
             {

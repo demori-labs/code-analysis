@@ -50,6 +50,12 @@
             Visible="false"
         />
         <None
+            Include="$(ArtifactsPath)\bin\DemoriLabs.CodeAnalysis.Attributes\$(Configuration.ToLowerInvariant())\DemoriLabs.CodeAnalysis.Attributes.xml"
+            Pack="true"
+            PackagePath="lib/netstandard2.0"
+            Visible="false"
+        />
+        <None
             Include="$(ArtifactsPath)\bin\DemoriLabs.CodeAnalysis.CodeFixes\$(Configuration.ToLowerInvariant())\DemoriLabs.CodeAnalysis.CodeFixes.dll"
             Pack="true"
             PackagePath="analyzers/dotnet/cs"

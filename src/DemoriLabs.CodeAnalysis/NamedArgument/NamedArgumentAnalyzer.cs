@@ -14,8 +14,7 @@ public sealed class NamedArgumentAnalyzer : DiagnosticAnalyzer
 {
     private const int DefaultNamedArgumentsThreshold = 2;
 
-    private const string NamedArgumentsThresholdOptionKey =
-        "dotnet_diagnostic.DL3001.named_arguments_threshold";
+    private const string NamedArgumentsThresholdOptionKey = "dotnet_diagnostic.DL3001.named_arguments_threshold";
 
     private static readonly DiagnosticDescriptor Rule = new(
         RuleIdentifiers.NamedArgument,
@@ -24,7 +23,7 @@ public sealed class NamedArgumentAnalyzer : DiagnosticAnalyzer
         RuleCategories.Style,
         DiagnosticSeverity.Warning,
         isEnabledByDefault: true,
-        description: "Arguments should be named when passed as ambiguous literals, when the variable name does not match the parameter name, or when the parameter is marked with [NamedArgument]."
+        description: "Arguments should be named when the parameter is marked with [NamedArgument], or when the method has more parameters than the configured threshold."
     );
 
     /// <inheritdoc />
@@ -49,10 +48,7 @@ public sealed class NamedArgumentAnalyzer : DiagnosticAnalyzer
         });
     }
 
-    private static void AnalyzeArgument(
-        SyntaxNodeAnalysisContext context,
-        INamedTypeSymbol? expressionType
-    )
+    private static void AnalyzeArgument(SyntaxNodeAnalysisContext context, INamedTypeSymbol? expressionType)
     {
         var argument = (ArgumentSyntax)context.Node;
 
@@ -65,8 +61,13 @@ public sealed class NamedArgumentAnalyzer : DiagnosticAnalyzer
         if (argument.Parent is BracketedArgumentListSyntax)
             return;
 
-        if (expressionType is not null && IsInsideExpressionTree(argument, context.SemanticModel, expressionType, context.CancellationToken))
+        if (
+            expressionType is not null
+            && IsInsideExpressionTree(argument, context.SemanticModel, expressionType, context.CancellationToken)
+        )
+        {
             return;
+        }
 
         var operation = context.SemanticModel.GetOperation(argument, context.CancellationToken) as IArgumentOperation;
         if (operation?.Parameter is null)
@@ -77,41 +78,34 @@ public sealed class NamedArgumentAnalyzer : DiagnosticAnalyzer
         if (parameter.IsParams)
             return;
 
-        if (AnnotationAttributes.HasNamedArgumentAttribute(parameter) || IsAmbiguousLiteral(argument.Expression))
+        // Rule 1: [NamedArgument] always reports
+        if (AnnotationAttributes.HasNamedArgumentAttribute(parameter))
         {
             context.ReportDiagnostic(Diagnostic.Create(Rule, argument.GetLocation(), parameter.Name));
             return;
         }
 
-        var minParameterCount = GetNamedArgumentsThreshold(context);
-
-        if (parameter.ContainingSymbol is IMethodSymbol method
-            && method.Parameters.Length > minParameterCount)
+        // Rule 2: Methods exceeding the threshold require naming for non-matching arguments
+        if (parameter.ContainingSymbol is IMethodSymbol method)
         {
-            context.ReportDiagnostic(Diagnostic.Create(Rule, argument.GetLocation(), parameter.Name));
-            return;
+            var visibleParameterCount = method.IsExtensionMethod
+                ? method.Parameters.Length - 1
+                : method.Parameters.Length;
+
+            var namedArgumentsThreshold = GetNamedArgumentsThreshold(context);
+
+            if (visibleParameterCount > namedArgumentsThreshold)
+            {
+                var argumentName = GetArgumentName(argument.Expression);
+                if (
+                    argumentName is null
+                    || !string.Equals(argumentName, parameter.Name, StringComparison.OrdinalIgnoreCase)
+                )
+                {
+                    context.ReportDiagnostic(Diagnostic.Create(Rule, argument.GetLocation(), parameter.Name));
+                }
+            }
         }
-
-        var argumentName = GetArgumentName(argument.Expression);
-        if (argumentName is null || !string.Equals(argumentName, parameter.Name, StringComparison.OrdinalIgnoreCase))
-        {
-            context.ReportDiagnostic(Diagnostic.Create(Rule, argument.GetLocation(), parameter.Name));
-        }
-    }
-
-    private static int GetNamedArgumentsThreshold(SyntaxNodeAnalysisContext context)
-    {
-        var options = context.Options.AnalyzerConfigOptionsProvider.GetOptions(context.Node.SyntaxTree);
-
-        if (
-            options.TryGetValue(NamedArgumentsThresholdOptionKey, out var value)
-            && int.TryParse(value, out var parsed)
-        )
-        {
-            return parsed;
-        }
-
-        return DefaultNamedArgumentsThreshold;
     }
 
     private static string? GetArgumentName(ExpressionSyntax expression)
@@ -126,16 +120,16 @@ public sealed class NamedArgumentAnalyzer : DiagnosticAnalyzer
         return name?.TrimStart('_');
     }
 
-    private static bool IsAmbiguousLiteral(ExpressionSyntax expression)
+    private static int GetNamedArgumentsThreshold(SyntaxNodeAnalysisContext context)
     {
-        return expression.Kind()
-            is SyntaxKind.NullLiteralExpression
-                or SyntaxKind.TrueLiteralExpression
-                or SyntaxKind.FalseLiteralExpression
-                or SyntaxKind.NumericLiteralExpression
-                or SyntaxKind.StringLiteralExpression
-                or SyntaxKind.CharacterLiteralExpression
-                or SyntaxKind.DefaultLiteralExpression;
+        var options = context.Options.AnalyzerConfigOptionsProvider.GetOptions(context.Node.SyntaxTree);
+
+        if (options.TryGetValue(NamedArgumentsThresholdOptionKey, out var value) && int.TryParse(value, out var parsed))
+        {
+            return parsed;
+        }
+
+        return DefaultNamedArgumentsThreshold;
     }
 
     private static bool IsInsideExpressionTree(
@@ -153,8 +147,7 @@ public sealed class NamedArgumentAnalyzer : DiagnosticAnalyzer
             var typeInfo = semanticModel.GetTypeInfo(current, cancellationToken);
             var convertedType = typeInfo.ConvertedType?.OriginalDefinition;
 
-            if (convertedType is not null
-                && SymbolEqualityComparer.Default.Equals(convertedType, expressionType))
+            if (convertedType is not null && SymbolEqualityComparer.Default.Equals(convertedType, expressionType))
             {
                 return true;
             }
