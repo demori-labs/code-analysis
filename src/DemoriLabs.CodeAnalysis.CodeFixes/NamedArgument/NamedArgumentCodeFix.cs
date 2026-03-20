@@ -5,6 +5,7 @@ using Microsoft.CodeAnalysis.CodeActions;
 using Microsoft.CodeAnalysis.CodeFixes;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
+using Microsoft.CodeAnalysis.Formatting;
 using Microsoft.CodeAnalysis.Operations;
 
 namespace DemoriLabs.CodeAnalysis.CodeFixes.NamedArgument;
@@ -74,7 +75,7 @@ public sealed class NamedArgumentCodeFix : CodeFixProvider
             .NameColon(SyntaxFactory.IdentifierName(parameterName))
             .WithTrailingTrivia(SyntaxFactory.Space);
 
-        var newArgument = argument.WithNameColon(nameColon);
+        var newArgument = argument.WithNameColon(nameColon).WithAdditionalAnnotations(Formatter.Annotation);
         var newRoot = root.ReplaceNode(argument, newArgument);
 
         return document.WithSyntaxRoot(newRoot);

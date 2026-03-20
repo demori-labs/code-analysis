@@ -5,6 +5,7 @@ using Microsoft.CodeAnalysis.CodeActions;
 using Microsoft.CodeAnalysis.CodeFixes;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
+using Microsoft.CodeAnalysis.Formatting;
 
 namespace DemoriLabs.CodeAnalysis.CodeFixes.PrimaryConstructor;
 
@@ -153,7 +154,7 @@ public sealed class UsePrimaryConstructorCodeFix : CodeFixProvider
             .WithParameterList(parameterList);
         newTypeDecl = HandleBaseInitializer(newTypeDecl, constructorDecl);
 
-        var newRoot = root.ReplaceNode(typeDecl, newTypeDecl);
+        var newRoot = root.ReplaceNode(typeDecl, newTypeDecl.WithAdditionalAnnotations(Formatter.Annotation));
         newRoot = newRoot.EnsureUsingDirective(semanticModel, "DemoriLabs.CodeAnalysis.Attributes");
 
         return document.WithSyntaxRoot(newRoot);
