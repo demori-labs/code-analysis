@@ -6,6 +6,7 @@ using Microsoft.CodeAnalysis.CodeFixes;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.FindSymbols;
+using Microsoft.CodeAnalysis.Formatting;
 
 namespace DemoriLabs.CodeAnalysis.CodeFixes.RecordDesign;
 
@@ -250,14 +251,13 @@ public sealed class RecordPrimaryConstructorTooManyParametersCodeFix : CodeFixPr
         if (creation.ArgumentList is null)
             return creation;
 
-        var assignments = new List<ExpressionSyntax>();
         var args = creation.ArgumentList.Arguments;
+        var assignments = new List<ExpressionSyntax>();
 
         for (var i = 0; i < args.Count && i < parameterNames.Count; i++)
         {
             var arg = args[i];
 
-            // Determine property name: use named argument mapping or positional index
             string propertyName;
             if (arg.NameColon is not null)
             {
@@ -269,13 +269,13 @@ public sealed class RecordPrimaryConstructorTooManyParametersCodeFix : CodeFixPr
                 propertyName = parameterNames[i];
             }
 
-            var assignment = SyntaxFactory.AssignmentExpression(
-                SyntaxKind.SimpleAssignmentExpression,
-                SyntaxFactory.IdentifierName(propertyName),
-                arg.Expression.WithoutTrivia()
+            assignments.Add(
+                SyntaxFactory.AssignmentExpression(
+                    SyntaxKind.SimpleAssignmentExpression,
+                    SyntaxFactory.IdentifierName(propertyName),
+                    arg.Expression.WithoutTrivia()
+                )
             );
-
-            assignments.Add(assignment);
         }
 
         var initializer = SyntaxFactory.InitializerExpression(
@@ -286,9 +286,10 @@ public sealed class RecordPrimaryConstructorTooManyParametersCodeFix : CodeFixPr
         return creation
             .WithArgumentList(null)
             .WithInitializer(initializer)
-            .NormalizeWhitespace(eol: "\n")
+            .NormalizeWhitespace("    ", "\n")
             .WithLeadingTrivia(creation.GetLeadingTrivia())
-            .WithTrailingTrivia(creation.GetTrailingTrivia());
+            .WithTrailingTrivia(creation.GetTrailingTrivia())
+            .WithAdditionalAnnotations(Formatter.Annotation);
     }
 
     private static SyntaxNode RewriteRecordDeclaration(
@@ -303,7 +304,7 @@ public sealed class RecordPrimaryConstructorTooManyParametersCodeFix : CodeFixPr
         if (record.ParameterList is null)
             return root;
 
-        var indent = GetIndent(document, record.SyntaxTree);
+        var indent = IndentationResolver.GetIndentUnit(document, record.SyntaxTree);
 
         var isMutableRecordStruct =
             record.IsKind(SyntaxKind.RecordStructDeclaration)
@@ -515,27 +516,6 @@ public sealed class RecordPrimaryConstructorTooManyParametersCodeFix : CodeFixPr
             .WithBody(newBody)
             .WithSemicolonToken(SyntaxFactory.Token(SyntaxKind.None))
             .WithLeadingTrivia(SyntaxFactory.LineFeed, SyntaxFactory.Whitespace(indent));
-    }
-
-    private static string GetIndent(Document document, SyntaxTree syntaxTree)
-    {
-        var options = document.Project.AnalyzerOptions.AnalyzerConfigOptionsProvider.GetOptions(syntaxTree);
-
-        var useTabs =
-            options.TryGetValue("indent_style", out var style)
-            && string.Equals(style, "tab", StringComparison.OrdinalIgnoreCase);
-
-        if (useTabs)
-        {
-            return "\t";
-        }
-
-        if (options.TryGetValue("indent_size", out var sizeValue) && int.TryParse(sizeValue, out var size))
-        {
-            return new string(' ', size);
-        }
-
-        return "    ";
     }
 
     private static SyntaxList<AttributeListSyntax> FilterAttributeLists(

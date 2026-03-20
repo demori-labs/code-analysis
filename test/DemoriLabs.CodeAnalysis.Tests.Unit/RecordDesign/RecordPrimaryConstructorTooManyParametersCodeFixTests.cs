@@ -549,13 +549,13 @@ public class RecordPrimaryConstructorTooManyParametersCodeFixTests
                 public void M()
                 {
                     var p = new Person
-            {
-                FirstName = "Alice",
-                LastName = "Smith",
-                Age = 30,
-                Email = "alice@test.com",
-                Phone = "123"
-            };
+                    {
+                        FirstName = "Alice",
+                        LastName = "Smith",
+                        Age = 30,
+                        Email = "alice@test.com",
+                        Phone = "123"
+                    };
                 }
             }
             """
@@ -595,21 +595,21 @@ public class RecordPrimaryConstructorTooManyParametersCodeFixTests
                 public void M()
                 {
                     var p1 = new Person
-            {
-                FirstName = "Alice",
-                LastName = "Smith",
-                Age = 30,
-                Email = "a@test.com",
-                Phone = "111"
-            };
+                    {
+                        FirstName = "Alice",
+                        LastName = "Smith",
+                        Age = 30,
+                        Email = "a@test.com",
+                        Phone = "111"
+                    };
                     var p2 = new Person
-            {
-                FirstName = "Bob",
-                LastName = "Jones",
-                Age = 25,
-                Email = "b@test.com",
-                Phone = "222"
-            };
+                    {
+                        FirstName = "Bob",
+                        LastName = "Jones",
+                        Age = 25,
+                        Email = "b@test.com",
+                        Phone = "222"
+                    };
                 }
             }
             """
@@ -646,11 +646,11 @@ public class RecordPrimaryConstructorTooManyParametersCodeFixTests
                 public void M()
                 {
                     var p = new Person
-            {
-                FirstName = "Alice",
-                LastName = "Smith",
-                Age = 30
-            };
+                    {
+                        FirstName = "Alice",
+                        LastName = "Smith",
+                        Age = 30
+                    };
                 }
             }
             """,
@@ -694,13 +694,13 @@ public class RecordPrimaryConstructorTooManyParametersCodeFixTests
                     var first = "Alice";
                     var last = "Smith";
                     var p = new Person
-            {
-                FirstName = first,
-                LastName = last,
-                Age = 30,
-                Email = "a@test.com",
-                Phone = "123"
-            };
+                    {
+                        FirstName = first,
+                        LastName = last,
+                        Age = 30,
+                        Email = "a@test.com",
+                        Phone = "123"
+                    };
                 }
             }
             """
