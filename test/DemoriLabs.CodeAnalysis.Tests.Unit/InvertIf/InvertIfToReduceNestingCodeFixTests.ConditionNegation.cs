@@ -278,11 +278,14 @@ public partial class InvertIfToReduceNestingCodeFixTests
                 {
                     {|DL3002:if|} (x is string)
                     {
+                        DoSomething();
                         return 1;
                     }
 
                     return 0;
                 }
+
+                private static void DoSomething() { }
             }
             """,
             """
@@ -293,8 +296,11 @@ public partial class InvertIfToReduceNestingCodeFixTests
                     if (x is not string)
                         return 0;
 
+                    DoSomething();
                     return 1;
                 }
+
+                private static void DoSomething() { }
             }
             """
         );
@@ -424,11 +430,14 @@ public partial class InvertIfToReduceNestingCodeFixTests
                 {
                     {|DL3002:if|} (x is string { Length: > 0 })
                     {
+                        DoSomething();
                         return 1;
                     }
 
                     return 0;
                 }
+
+                private static void DoSomething() { }
             }
             """,
             """
@@ -439,8 +448,11 @@ public partial class InvertIfToReduceNestingCodeFixTests
                     if (x is not string { Length: > 0 })
                         return 0;
 
+                    DoSomething();
                     return 1;
                 }
+
+                private static void DoSomething() { }
             }
             """
         );
@@ -502,11 +514,14 @@ public partial class InvertIfToReduceNestingCodeFixTests
                 {
                     {|DL3002:if|} (false)
                     {
+                        DoSomething();
                         return 1;
                     }
 
                     return 0;
                 }
+
+                private static void DoSomething() { }
             }
             """,
             """
@@ -517,8 +532,11 @@ public partial class InvertIfToReduceNestingCodeFixTests
                     if (true)
                         return 0;
 
+                    DoSomething();
                     return 1;
                 }
+
+                private static void DoSomething() { }
             }
             """
         );
@@ -537,11 +555,14 @@ public partial class InvertIfToReduceNestingCodeFixTests
                 {
                     {|DL3002:if|} (a == b)
                     {
+                        DoSomething();
                         return 1;
                     }
 
                     return 0;
                 }
+
+                private static void DoSomething() { }
             }
             """,
             """
@@ -552,8 +573,11 @@ public partial class InvertIfToReduceNestingCodeFixTests
                     if (a != b)
                         return 0;
 
+                    DoSomething();
                     return 1;
                 }
+
+                private static void DoSomething() { }
             }
             """
         );

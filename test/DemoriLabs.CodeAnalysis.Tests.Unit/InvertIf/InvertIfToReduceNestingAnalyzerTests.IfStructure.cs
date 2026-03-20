@@ -113,7 +113,7 @@ public partial class InvertIfToReduceNestingAnalyzerTests
             {
                 public int M(bool condition)
                 {
-                    {|DL3002:if|} (condition)
+                    if (condition)
                     {
                         return 42;
                     }

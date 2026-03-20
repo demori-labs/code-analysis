@@ -85,6 +85,18 @@ public sealed class InvertIfToReduceNestingAnalyzer : DiagnosticAnalyzer
             return;
         }
 
+        // Don't flag when the if body is a single exit statement followed by another exit —
+        // inverting would just swap the two branches with no nesting reduction.
+        if (
+            ifStatement.Else is null
+            && isSecondToLast
+            && ifStatement.Statement is BlockSyntax { Statements.Count: 1 } singleBlock
+            && IsExitStatement(singleBlock.Statements[0])
+        )
+        {
+            return;
+        }
+
         context.ReportDiagnostic(Diagnostic.Create(Rule, ifStatement.IfKeyword.GetLocation()));
     }
 

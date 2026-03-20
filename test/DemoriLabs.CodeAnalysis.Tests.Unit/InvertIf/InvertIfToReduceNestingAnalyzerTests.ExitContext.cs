@@ -37,11 +37,14 @@ public partial class InvertIfToReduceNestingAnalyzerTests
                 {
                     {|DL3002:if|} (condition)
                     {
+                        DoSomething();
                         return 42;
                     }
 
                     return 0;
                 }
+
+                private static void DoSomething() { }
             }
             """
         );
@@ -108,6 +111,7 @@ public partial class InvertIfToReduceNestingAnalyzerTests
                 {
                     {|DL3002:if|} (condition)
                     {
+                        await Task.Delay(1);
                         return await Task.FromResult(42);
                     }
 
