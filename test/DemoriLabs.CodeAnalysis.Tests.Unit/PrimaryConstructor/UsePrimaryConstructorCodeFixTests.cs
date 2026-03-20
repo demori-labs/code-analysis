@@ -50,7 +50,10 @@ public class UsePrimaryConstructorCodeFixTests
             """
             using DemoriLabs.CodeAnalysis.Attributes;
 
-            public class MyService([ReadOnly] int id, [ReadOnly] string name)
+            public class MyService(
+                [ReadOnly] int id,
+                [ReadOnly] string name
+            )
             {
                 public int GetId() => id;
                 public string GetName() => name;
@@ -84,7 +87,10 @@ public class UsePrimaryConstructorCodeFixTests
             """
             using DemoriLabs.CodeAnalysis.Attributes;
 
-            public class MyService([ReadOnly] string httpClient, [ReadOnly] int count)
+            public class MyService(
+                [ReadOnly] string httpClient,
+                [ReadOnly] int count
+            )
             {
                 public string GetClient() => httpClient;
                 public int GetCount() => count;
@@ -125,7 +131,10 @@ public class UsePrimaryConstructorCodeFixTests
                 public Base(int id) { }
             }
 
-            public class Derived([ReadOnly] int id, [ReadOnly] string name) : Base(id)
+            public class Derived(
+                [ReadOnly] int id,
+                [ReadOnly] string name
+            ) : Base(id)
             {
                 public string GetName() => name;
             }
@@ -156,7 +165,9 @@ public class UsePrimaryConstructorCodeFixTests
             """
             using DemoriLabs.CodeAnalysis.Attributes;
 
-            public class Calculator([ReadOnly] int value)
+            public class Calculator(
+                [ReadOnly] int value
+            )
             {
                 public int Double() => value * 2;
                 public bool IsPositive() => value > 0;
@@ -189,7 +200,10 @@ public class UsePrimaryConstructorCodeFixTests
             """
             using DemoriLabs.CodeAnalysis.Attributes;
 
-            public struct Point([ReadOnly] int x, [ReadOnly] int y)
+            public struct Point(
+                [ReadOnly] int x,
+                [ReadOnly] int y
+            )
             {
                 public int Sum() => x + y;
             }
@@ -219,7 +233,9 @@ public class UsePrimaryConstructorCodeFixTests
             """
             using DemoriLabs.CodeAnalysis.Attributes;
 
-            public class MyService([ReadOnly] int id)
+            public class MyService(
+                [ReadOnly] int id
+            )
             {
                 public int GetId() => id;
             }

@@ -71,11 +71,15 @@ public sealed class NamedArgumentCodeFix : CodeFixProvider
         if (root is null)
             return document;
 
+        // Transfer leading trivia (indentation) from the expression to the NameColon,
+        // since NameColon becomes the first token in the argument.
+        var leadingTrivia = argument.Expression.GetLeadingTrivia();
         var nameColon = SyntaxFactory
             .NameColon(SyntaxFactory.IdentifierName(parameterName))
+            .WithLeadingTrivia(leadingTrivia)
             .WithTrailingTrivia(SyntaxFactory.Space);
 
-        var newArgument = argument.WithNameColon(nameColon).WithAdditionalAnnotations(Formatter.Annotation);
+        var newArgument = argument.WithNameColon(nameColon).WithExpression(argument.Expression.WithoutLeadingTrivia());
         var newRoot = root.ReplaceNode(argument, newArgument);
 
         return document.WithSyntaxRoot(newRoot);

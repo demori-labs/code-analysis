@@ -78,6 +78,9 @@ public sealed class NamedArgumentAnalyzer : DiagnosticAnalyzer
         if (parameter.IsParams)
             return;
 
+        if (parameter.Type.TypeKind is TypeKind.Enum)
+            return;
+
         // Rule 1: [NamedArgument] always reports
         if (AnnotationAttributes.HasNamedArgumentAttribute(parameter))
         {

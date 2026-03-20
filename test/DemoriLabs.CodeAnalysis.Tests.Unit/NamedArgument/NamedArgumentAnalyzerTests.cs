@@ -1002,6 +1002,27 @@ public class NamedArgumentAnalyzerTests
     }
 
     [Test]
+    public async Task EnumParameter_NoDiagnostic()
+    {
+        var test = CreateTest(
+            """
+            using System.IO;
+
+            public class C
+            {
+                public void M()
+                {
+                    var path = "./file.txt";
+                    using var stream = File.Open(path, FileMode.Open, FileAccess.Read);
+                }
+            }
+            """
+        );
+
+        await test.RunAsync();
+    }
+
+    [Test]
     public async Task OptionalParams_NotCounted_NoDiagnostic()
     {
         var test = CreateTest(

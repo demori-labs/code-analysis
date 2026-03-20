@@ -85,10 +85,8 @@ public sealed class UsePrimaryConstructorCodeFix : CodeFixProvider
         // Build primary constructor parameters with [ReadOnly]
         var primaryParams = BuildPrimaryConstructorParameters(constructorDecl);
 
-        // Build parameter list
-        var parameterList = SyntaxFactory
-            .ParameterList(SyntaxFactory.SeparatedList(primaryParams))
-            .WithTrailingTrivia(SyntaxFactory.Space);
+        // Build parameter list with one parameter per line
+        var parameterList = FormatParameterList(primaryParams, typeDecl, document, root.SyntaxTree);
 
         // Rewrite: replace field references, remove constructor, remove fields
         var rewriter = new PrimaryConstructorRewriter(fieldSymbolToParamName, semanticModel, ct);
@@ -145,7 +143,6 @@ public sealed class UsePrimaryConstructorCodeFix : CodeFixProvider
 
         // Move trailing trivia from identifier to after parameter list
         var identifier = rewrittenType.Identifier;
-        // Ensure open brace only has a single trailing newline
         var openBrace = rewrittenType.OpenBraceToken.WithTrailingTrivia(SyntaxFactory.EndOfLine("\n"));
         var newTypeDecl = rewrittenType
             .WithIdentifier(identifier.WithTrailingTrivia())
@@ -233,6 +230,50 @@ public sealed class UsePrimaryConstructorCodeFix : CodeFixProvider
                     .WithAttributeLists(SyntaxFactory.SingletonList(attributeList))
             ),
         ];
+    }
+
+    private static ParameterListSyntax FormatParameterList(
+        List<ParameterSyntax> parameters,
+        TypeDeclarationSyntax typeDecl,
+        Document document,
+        SyntaxTree syntaxTree
+    )
+    {
+        if (parameters.Count is 0)
+        {
+            return SyntaxFactory.ParameterList().WithTrailingTrivia(SyntaxFactory.Space);
+        }
+
+        // Detect the type declaration's indentation
+        var typeIndent =
+            typeDecl
+                .GetLeadingTrivia()
+                .Where(static t => t.IsKind(SyntaxKind.WhitespaceTrivia))
+                .Select(static t => t.ToString())
+                .LastOrDefault()
+            ?? "";
+
+        var indentUnit = IndentationResolver.GetIndentUnit(document, syntaxTree);
+        var paramIndent = typeIndent + indentUnit;
+        var newLine = SyntaxFactory.EndOfLine("\n");
+        var paramIndentTrivia = SyntaxFactory.Whitespace(paramIndent);
+        var typeIndentTrivia = SyntaxFactory.Whitespace(typeIndent);
+
+        // Format each parameter with leading newline + indentation
+        var formattedParams = new List<ParameterSyntax>(parameters.Count);
+        foreach (var param in parameters)
+        {
+            formattedParams.Add(param.WithLeadingTrivia(newLine, paramIndentTrivia));
+        }
+
+        // Build separated list with commas (no trailing comma)
+        var separatedList = SyntaxFactory.SeparatedList(formattedParams);
+
+        return SyntaxFactory
+            .ParameterList(separatedList)
+            .WithCloseParenToken(
+                SyntaxFactory.Token(SyntaxKind.CloseParenToken).WithLeadingTrivia(newLine, typeIndentTrivia)
+            );
     }
 
     private static TypeDeclarationSyntax HandleBaseInitializer(
