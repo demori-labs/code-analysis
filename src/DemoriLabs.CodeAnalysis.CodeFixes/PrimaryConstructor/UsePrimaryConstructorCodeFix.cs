@@ -6,6 +6,7 @@ using Microsoft.CodeAnalysis.CodeFixes;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.Formatting;
+using Microsoft.CodeAnalysis.Rename;
 
 namespace DemoriLabs.CodeAnalysis.CodeFixes.PrimaryConstructor;
 
@@ -51,7 +52,7 @@ public sealed class UsePrimaryConstructorCodeFix : CodeFixProvider
         );
     }
 
-    private static async Task<Document> UsePrimaryConstructorAsync(
+    private static async Task<Solution> UsePrimaryConstructorAsync(
         Document document,
         ConstructorDeclarationSyntax constructorDecl,
         CancellationToken ct
@@ -59,89 +60,138 @@ public sealed class UsePrimaryConstructorCodeFix : CodeFixProvider
     {
         var root = await document.GetSyntaxRootAsync(ct).ConfigureAwait(false);
         if (root is null)
-        {
-            return document;
-        }
+            return document.Project.Solution;
 
         var semanticModel = await document.GetSemanticModelAsync(ct).ConfigureAwait(false);
-        if (semanticModel is null || constructorDecl.Parent is not TypeDeclarationSyntax typeDecl)
-        {
-            return document;
-        }
+        if (semanticModel is null || constructorDecl.Parent is not TypeDeclarationSyntax)
+            return document.Project.Solution;
 
         var fieldToParamMap = BuildFieldToParameterMap(constructorDecl, semanticModel, ct);
         if (fieldToParamMap.Count is 0 && constructorDecl.ParameterList.Parameters.Count is 0)
-        {
-            return document;
-        }
+            return document.Project.Solution;
 
-        // Build the field symbol to new parameter name map
-        var fieldSymbolToParamName = new Dictionary<IFieldSymbol, string>(SymbolEqualityComparer.Default);
+        var currentSolution = document.Project.Solution;
+
         foreach (var kvp in fieldToParamMap)
         {
-            fieldSymbolToParamName[kvp.Key] = kvp.Value;
+            var fieldSymbol = kvp.Key;
+            var paramName = kvp.Value;
+
+            if (
+                string.Equals(fieldSymbol.Name, paramName, StringComparison.Ordinal) is false
+                && fieldSymbol.DeclaredAccessibility is Accessibility.Private
+            )
+            {
+                currentSolution = await Renamer
+                    .RenameSymbolAsync(currentSolution, fieldSymbol, new SymbolRenameOptions(), paramName, ct)
+                    .ConfigureAwait(false);
+            }
         }
 
-        // Build primary constructor parameters with [ReadOnly]
-        var primaryParams = BuildPrimaryConstructorParameters(constructorDecl);
+        var currentDocument = currentSolution.GetDocument(document.Id)!;
+        var currentRoot = await currentDocument.GetSyntaxRootAsync(ct).ConfigureAwait(false);
+        var currentSemanticModel = await currentDocument.GetSemanticModelAsync(ct).ConfigureAwait(false);
+        if (currentRoot is null || currentSemanticModel is null)
+            return currentSolution;
 
-        // Build parameter list with one parameter per line
-        var parameterList = FormatParameterList(primaryParams, typeDecl, document, root.SyntaxTree);
+        var currentConstructor = currentRoot
+            .DescendantNodes()
+            .OfType<ConstructorDeclarationSyntax>()
+            .FirstOrDefault(c => c.Identifier.Text == constructorDecl.Identifier.Text);
 
-        // Rewrite: replace field references, remove constructor, remove fields
-        var rewriter = new PrimaryConstructorRewriter(fieldSymbolToParamName, semanticModel, ct);
-        var rewrittenType = (TypeDeclarationSyntax)rewriter.Visit(typeDecl);
+        if (currentConstructor is null || currentConstructor.Parent is not TypeDeclarationSyntax currentTypeDecl)
+            return currentSolution;
 
-        // Remove the constructor from members
+        var currentFieldMap = BuildFieldToParameterMap(currentConstructor, currentSemanticModel, ct);
+
+        var fieldSymbolToParamName = new Dictionary<IFieldSymbol, string>(SymbolEqualityComparer.Default);
+        var nonPrivateFieldToParam = new Dictionary<string, string>();
+        var fieldsToRemove = new HashSet<string>();
+
+        foreach (var kvp in currentFieldMap)
+        {
+            if (kvp.Key.DeclaredAccessibility is Accessibility.Private)
+            {
+                fieldSymbolToParamName[kvp.Key] = kvp.Value;
+                fieldsToRemove.Add(kvp.Key.Name);
+            }
+            else
+            {
+                nonPrivateFieldToParam[kvp.Key.Name] = kvp.Value;
+            }
+        }
+
+        var primaryParams = BuildPrimaryConstructorParameters(currentConstructor);
+        var parameterList = FormatParameterList(
+            primaryParams,
+            currentTypeDecl,
+            currentDocument,
+            currentRoot.SyntaxTree
+        );
+
+        var rewriter = new PrimaryConstructorRewriter(fieldSymbolToParamName, currentSemanticModel, ct);
+        var rewrittenType = (TypeDeclarationSyntax)rewriter.Visit(currentTypeDecl);
+
         var membersWithoutConstructor = new SyntaxList<MemberDeclarationSyntax>();
         foreach (var member in rewrittenType.Members)
         {
             if (member is ConstructorDeclarationSyntax)
-            {
                 continue;
-            }
 
             membersWithoutConstructor = membersWithoutConstructor.Add(member);
         }
 
-        // Remove backing fields
-        var fieldsToRemove = new HashSet<string>(fieldToParamMap.Select(kvp => kvp.Key.Name));
         var finalMembers = new SyntaxList<MemberDeclarationSyntax>();
         foreach (var member in membersWithoutConstructor)
         {
             if (member is FieldDeclarationSyntax fieldDecl)
             {
-                var remainingVariables = fieldDecl
-                    .Declaration.Variables.Where(v => fieldsToRemove.Contains(v.Identifier.Text) is false)
-                    .ToList();
+                var newVariables = new List<VariableDeclaratorSyntax>();
+                var skipEntireField = true;
 
-                if (remainingVariables.Count is 0)
+                foreach (var variable in fieldDecl.Declaration.Variables)
                 {
-                    continue;
+                    if (fieldsToRemove.Contains(variable.Identifier.Text))
+                        continue;
+
+                    if (nonPrivateFieldToParam.TryGetValue(variable.Identifier.Text, out var paramName))
+                    {
+                        newVariables.Add(
+                            variable.WithInitializer(
+                                SyntaxFactory.EqualsValueClause(SyntaxFactory.IdentifierName(paramName))
+                            )
+                        );
+                        skipEntireField = false;
+                    }
+                    else
+                    {
+                        newVariables.Add(variable);
+                        skipEntireField = false;
+                    }
                 }
 
-                if (remainingVariables.Count < fieldDecl.Declaration.Variables.Count)
-                {
-                    var newDeclaration = fieldDecl.Declaration.WithVariables(
-                        SyntaxFactory.SeparatedList(remainingVariables)
-                    );
-                    finalMembers = finalMembers.Add(fieldDecl.WithDeclaration(newDeclaration));
+                if (skipEntireField)
                     continue;
-                }
+
+                var newDeclaration = fieldDecl.Declaration.WithVariables(SyntaxFactory.SeparatedList(newVariables));
+                finalMembers = finalMembers.Add(fieldDecl.WithDeclaration(newDeclaration));
+                continue;
             }
 
             finalMembers = finalMembers.Add(member);
         }
 
-        // Clean up leading trivia on first remaining member to avoid double blank lines
         if (finalMembers.Count > 0)
         {
             var firstMember = finalMembers[0];
-            var cleanedTrivia = NormalizeLeadingTrivia(firstMember.GetLeadingTrivia(), document, root.SyntaxTree);
+            var cleanedTrivia = NormalizeLeadingTrivia(
+                firstMember.GetLeadingTrivia(),
+                currentDocument,
+                currentRoot.SyntaxTree
+            );
             finalMembers = finalMembers.Replace(firstMember, firstMember.WithLeadingTrivia(cleanedTrivia));
         }
 
-        // Move trailing trivia from identifier to after parameter list
         var identifier = rewrittenType.Identifier;
         var openBrace = rewrittenType.OpenBraceToken.WithTrailingTrivia(SyntaxFactory.EndOfLine("\n"));
         var newTypeDecl = rewrittenType
@@ -149,12 +199,15 @@ public sealed class UsePrimaryConstructorCodeFix : CodeFixProvider
             .WithOpenBraceToken(openBrace)
             .WithMembers(finalMembers)
             .WithParameterList(parameterList);
-        newTypeDecl = HandleBaseInitializer(newTypeDecl, constructorDecl);
+        newTypeDecl = HandleBaseInitializer(newTypeDecl, currentConstructor);
 
-        var newRoot = root.ReplaceNode(typeDecl, newTypeDecl.WithAdditionalAnnotations(Formatter.Annotation));
-        newRoot = newRoot.EnsureUsingDirective(semanticModel, "DemoriLabs.CodeAnalysis.Attributes");
+        var newRoot = currentRoot.ReplaceNode(
+            currentTypeDecl,
+            newTypeDecl.WithAdditionalAnnotations(Formatter.Annotation)
+        );
+        newRoot = newRoot.EnsureUsingDirective(currentSemanticModel, "DemoriLabs.CodeAnalysis.Attributes");
 
-        return document.WithSyntaxRoot(newRoot);
+        return currentSolution.WithDocumentSyntaxRoot(document.Id, newRoot);
     }
 
     private static List<KeyValuePair<IFieldSymbol, string>> BuildFieldToParameterMap(

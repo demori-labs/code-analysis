@@ -244,4 +244,114 @@ public class UsePrimaryConstructorCodeFixTests
 
         await test.RunAsync();
     }
+
+    [Test]
+    public async Task RenamesPrivateFieldReferencesAcrossSameFile()
+    {
+        var test = CreateTest(
+            """
+            public class Base
+            {
+                public Base(object logger) { }
+            }
+
+            public class OrderService : Base
+            {
+                private readonly object _Repository;
+
+                public {|DL1005:OrderService|}(object logger, object repository) : base(logger)
+                {
+                    _Repository = repository;
+                }
+
+                public object GetRepo() => _Repository;
+            }
+            """,
+            """
+            using DemoriLabs.CodeAnalysis.Attributes;
+
+            public class Base
+            {
+                public Base(object logger) { }
+            }
+
+            public class OrderService(
+                [ReadOnly] object logger,
+                [ReadOnly] object repository
+            ) : Base(logger)
+            {
+                public object GetRepo() => repository;
+            }
+            """
+        );
+
+        await test.RunAsync();
+    }
+
+    [Test]
+    public async Task ProtectedField_KeptAsInitialisedField()
+    {
+        var test = CreateTest(
+            """
+            public class ServiceBase
+            {
+                protected readonly object Mediator;
+
+                public {|DL1005:ServiceBase|}(object mediator)
+                {
+                    Mediator = mediator;
+                }
+            }
+            """,
+            """
+            using DemoriLabs.CodeAnalysis.Attributes;
+
+            public class ServiceBase(
+                [ReadOnly] object mediator
+            )
+            {
+                protected readonly object Mediator = mediator;
+            }
+            """
+        );
+
+        await test.RunAsync();
+    }
+
+    [Test]
+    public async Task MixedPrivateAndProtectedFields_PrivateRemovedProtectedKept()
+    {
+        var test = CreateTest(
+            """
+            public class ServiceBase
+            {
+                protected readonly object Mediator;
+                private readonly object _logger;
+
+                public {|DL1005:ServiceBase|}(object mediator, object logger)
+                {
+                    Mediator = mediator;
+                    _logger = logger;
+                }
+
+                public object GetLogger() => _logger;
+            }
+            """,
+            """
+            using DemoriLabs.CodeAnalysis.Attributes;
+
+            public class ServiceBase(
+                [ReadOnly] object mediator,
+                [ReadOnly] object logger
+            )
+            {
+                protected readonly object Mediator = mediator;
+
+                public object GetLogger() => logger;
+            }
+            """
+        );
+
+        await test.RunAsync();
+    }
 }
