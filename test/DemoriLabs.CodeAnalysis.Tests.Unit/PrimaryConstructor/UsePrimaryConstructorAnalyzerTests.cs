@@ -93,6 +93,46 @@ public class UsePrimaryConstructorAnalyzerTests
     }
 
     [Test]
+    public async Task DerivedFromAspNetController_WithBaseCallAndFieldAssignment_ReportsDiagnostic()
+    {
+        var test = new CSharpAnalyzerTest<UsePrimaryConstructorAnalyzer, DefaultVerifier>
+        {
+            TestCode = """
+                using Microsoft.AspNetCore.Mvc;
+
+                public class ApiControllerBase : ControllerBase
+                {
+                    protected readonly object Mediator;
+
+                    public {|DL1005:ApiControllerBase|}(object mediator)
+                    {
+                        Mediator = mediator;
+                    }
+                }
+
+                public class DocumentsController : ApiControllerBase
+                {
+                    private readonly object _mapper;
+
+                    public {|DL1005:DocumentsController|}(object mediator, object mapper)
+                        : base(mediator)
+                    {
+                        _mapper = mapper;
+                    }
+                }
+                """,
+            ReferenceAssemblies = new ReferenceAssemblies(
+                "net10.0",
+                new PackageIdentity("Microsoft.NETCore.App.Ref", "10.0.0-preview.4.25258.110"),
+                System.IO.Path.Combine("ref", "net10.0")
+            ).AddPackages([new PackageIdentity("Microsoft.AspNetCore.App.Ref", "10.0.0-preview.4.25258.110")]),
+        };
+
+        test.TestState.AdditionalReferences.Add(typeof(MutableAttribute).Assembly);
+        await test.RunAsync();
+    }
+
+    [Test]
     public async Task ConstructorWithThisFieldAccess_ReportsDiagnostic()
     {
         var test = CreateTest(
