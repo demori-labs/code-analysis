@@ -926,6 +926,14 @@ public sealed class InvertIfToReduceNestingCodeFix : CodeFixProvider
 
     private sealed class ComparisonToPatternRewriter(HashSet<string> knownConstants) : CSharpSyntaxRewriter
     {
+        // Do not rewrite comparisons inside lambda expressions — they may be
+        // converted to expression trees (e.g. IQueryable), which do not support
+        // pattern-matching 'is' expressions.
+        public override SyntaxNode? VisitSimpleLambdaExpression(SimpleLambdaExpressionSyntax node) => node;
+
+        public override SyntaxNode? VisitParenthesizedLambdaExpression(ParenthesizedLambdaExpressionSyntax node) =>
+            node;
+
         private bool IsConstant(ExpressionSyntax expression)
         {
             return expression switch

@@ -1405,4 +1405,81 @@ public partial class InvertIfToReduceNestingCodeFixTests
 
         await test.RunAsync();
     }
+
+    [Test]
+    public async Task Integration_LambdaComparisonsPreservedForExpressionTreeCompatibility()
+    {
+        var test = CreateTest(
+            """
+            using System;
+            using System.Linq;
+            using System.Threading.Tasks;
+
+            public class C
+            {
+                private readonly DbContext dbContext = null!;
+
+                public Task<IQueryable<Notification>> Handle(bool includeExpired)
+                {
+                    IQueryable<Notification> notifications = dbContext.Notifications;
+
+                    {|DL3002:if|} (!includeExpired)
+                    {
+                        notifications = notifications.Where(n =>
+                            n.ExpirationDate > DateTime.UtcNow || n.ExpirationDate == null
+                        );
+                    }
+
+                    return Task.FromResult(notifications);
+                }
+            }
+
+            public class DbContext
+            {
+                public IQueryable<Notification> Notifications { get; set; } = null!;
+            }
+
+            public class Notification
+            {
+                public DateTime? ExpirationDate { get; set; }
+            }
+            """,
+            """
+            using System;
+            using System.Linq;
+            using System.Threading.Tasks;
+
+            public class C
+            {
+                private readonly DbContext dbContext = null!;
+
+                public Task<IQueryable<Notification>> Handle(bool includeExpired)
+                {
+                    IQueryable<Notification> notifications = dbContext.Notifications;
+
+                    if (includeExpired)
+                        return Task.FromResult(notifications);
+
+                    notifications = notifications.Where(n =>
+                        n.ExpirationDate > DateTime.UtcNow || n.ExpirationDate == null
+                    );
+
+                    return Task.FromResult(notifications);
+                }
+            }
+
+            public class DbContext
+            {
+                public IQueryable<Notification> Notifications { get; set; } = null!;
+            }
+
+            public class Notification
+            {
+                public DateTime? ExpirationDate { get; set; }
+            }
+            """
+        );
+
+        await test.RunAsync();
+    }
 }
