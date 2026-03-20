@@ -308,6 +308,74 @@ public class UsePrimaryConstructorAnalyzerTests
     }
 
     [Test]
+    public async Task EmptyBodyForwardingAllParametersToBase_ReportsDiagnostic()
+    {
+        var test = CreateTest(
+            """
+            public abstract class HandlerBase<T>
+            {
+                public HandlerBase(string name, T value) { }
+            }
+
+            public class ConcreteHandler : HandlerBase<int>
+            {
+                public {|DL1005:ConcreteHandler|}(string name, int value) : base(name, value)
+                {
+                }
+
+                public void Execute() { }
+            }
+            """
+        );
+
+        await test.RunAsync();
+    }
+
+    [Test]
+    public async Task EmptyBodyBaseForwardingOnlySomeParameters_NoDiagnostic()
+    {
+        var test = CreateTest(
+            """
+            public class Base
+            {
+                public Base(string name) { }
+            }
+
+            public class Derived : Base
+            {
+                public Derived(string name, int count) : base(name)
+                {
+                }
+            }
+            """
+        );
+
+        await test.RunAsync();
+    }
+
+    [Test]
+    public async Task EmptyBodyBaseForwardingWithExpressions_NoDiagnostic()
+    {
+        var test = CreateTest(
+            """
+            public class Base
+            {
+                public Base(string name, int count) { }
+            }
+
+            public class Derived : Base
+            {
+                public Derived(string name, int count) : base(name.Trim(), count + 1)
+                {
+                }
+            }
+            """
+        );
+
+        await test.RunAsync();
+    }
+
+    [Test]
     public async Task ConstructorWithUnmappedParameter_NoDiagnostic()
     {
         var test = CreateTest(

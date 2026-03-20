@@ -68,7 +68,21 @@ public sealed class SuggestReadOnlyPrimaryConstructorParameterCodeFix : CodeFixP
             .AttributeList(SyntaxFactory.SingletonSeparatedList(attribute))
             .WithTrailingTrivia(SyntaxFactory.Space);
 
-        var newParameter = parameter.WithAttributeLists(parameter.AttributeLists.Add(attributeList));
+        ParameterSyntax newParameter;
+
+        if (parameter.AttributeLists.Count is 0 && parameter.Type is not null)
+        {
+            // Transfer leading trivia (indentation) from the type to the attribute list,
+            // since the attribute's `[` becomes the first token of the parameter.
+            attributeList = attributeList.WithLeadingTrivia(parameter.GetLeadingTrivia());
+            newParameter = parameter
+                .WithType(parameter.Type.WithoutLeadingTrivia())
+                .WithAttributeLists(SyntaxFactory.SingletonList(attributeList));
+        }
+        else
+        {
+            newParameter = parameter.WithAttributeLists(parameter.AttributeLists.Add(attributeList));
+        }
 
         var newRoot = root.ReplaceNode(parameter, newParameter);
         newRoot = newRoot.EnsureUsingDirective(semanticModel, "DemoriLabs.CodeAnalysis.Attributes");

@@ -35,7 +35,10 @@ public sealed class UsePrimaryConstructorAnalyzer : DiagnosticAnalyzer
     {
         var constructorSyntax = (ConstructorDeclarationSyntax)context.Node;
 
-        if (constructorSyntax.Body is not { Statements.Count: > 0 } body)
+        if (constructorSyntax.Body is not { } body)
+            return;
+
+        if (body.Statements.Count == 0 && constructorSyntax.Initializer is null)
             return;
 
         if (constructorSyntax.Parent is not TypeDeclarationSyntax typeDecl)

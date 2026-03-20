@@ -83,4 +83,52 @@ public class SuggestReadOnlyPrimaryConstructorParameterCodeFixTests
 
         await test.RunAsync();
     }
+
+    [Test]
+    public async Task AddsReadOnlyAttribute_WithExistingAttribute()
+    {
+        var test = CreateTest(
+            """
+            using System.ComponentModel.DataAnnotations;
+            using DemoriLabs.CodeAnalysis.Attributes;
+
+            public class Service([Required] string {|DL2003:name|});
+            """,
+            """
+            using System.ComponentModel.DataAnnotations;
+            using DemoriLabs.CodeAnalysis.Attributes;
+
+            public class Service([Required][ReadOnly] string name);
+            """
+        );
+
+        await test.RunAsync();
+    }
+
+    [Test]
+    public async Task AddsReadOnlyAttribute_MultiLineParameterList()
+    {
+        var test = CreateTest(
+            """
+            using System.ComponentModel.DataAnnotations;
+            using DemoriLabs.CodeAnalysis.Attributes;
+
+            public class Service(
+                [Required] string {|DL2003:name|},
+                int {|DL2003:count|}
+            );
+            """,
+            """
+            using System.ComponentModel.DataAnnotations;
+            using DemoriLabs.CodeAnalysis.Attributes;
+
+            public class Service(
+                [Required][ReadOnly] string name,
+                [ReadOnly] int count
+            );
+            """
+        );
+
+        await test.RunAsync();
+    }
 }

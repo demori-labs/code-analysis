@@ -145,6 +145,46 @@ public class UsePrimaryConstructorCodeFixTests
     }
 
     [Test]
+    public async Task EmptyBodyForwardingAllParametersToBase()
+    {
+        var test = CreateTest(
+            """
+            public abstract class HandlerBase<T>
+            {
+                public HandlerBase(string name, T value) { }
+            }
+
+            public class ConcreteHandler : HandlerBase<int>
+            {
+                public {|DL1005:ConcreteHandler|}(string name, int value) : base(name, value)
+                {
+                }
+
+                public void Execute() { }
+            }
+            """,
+            """
+            using DemoriLabs.CodeAnalysis.Attributes;
+
+            public abstract class HandlerBase<T>
+            {
+                public HandlerBase(string name, T value) { }
+            }
+
+            public class ConcreteHandler(
+                [ReadOnly] string name,
+                [ReadOnly] int value
+            ) : HandlerBase<int>(name, value)
+            {
+                public void Execute() { }
+            }
+            """
+        );
+
+        await test.RunAsync();
+    }
+
+    [Test]
     public async Task ReplacesFieldReferencesInMethods()
     {
         var test = CreateTest(
