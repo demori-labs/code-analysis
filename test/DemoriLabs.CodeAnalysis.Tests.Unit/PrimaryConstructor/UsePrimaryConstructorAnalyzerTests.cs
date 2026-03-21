@@ -113,7 +113,32 @@ public class UsePrimaryConstructorAnalyzerTests
     }
 
     [Test]
-    public async Task ClassWithMultipleConstructors_NoDiagnostic()
+    public async Task MultipleConstructors_AllChainingToMain_ReportsDiagnostic()
+    {
+        var test = CreateTest(
+            """
+            public class MyService
+            {
+                private readonly int _id;
+                private readonly string _name;
+
+                public {|DL1005:MyService|}(int id, string name)
+                {
+                    _id = id;
+                    _name = name;
+                }
+
+                public MyService(int id) : this(id, "default") { }
+                public MyService() : this(0, "default") { }
+            }
+            """
+        );
+
+        await test.RunAsync();
+    }
+
+    [Test]
+    public async Task MultipleConstructors_NotAllChaining_NoDiagnostic()
     {
         var test = CreateTest(
             """
@@ -126,8 +151,9 @@ public class UsePrimaryConstructorAnalyzerTests
                     _id = id;
                 }
 
-                public MyService() : this(0)
+                public MyService(string name)
                 {
+                    _id = name.Length;
                 }
             }
             """
@@ -308,6 +334,26 @@ public class UsePrimaryConstructorAnalyzerTests
 
                 public {|DL1005:Event|}(int orderId)
                     => OrderId = orderId;
+            }
+            """
+        );
+
+        await test.RunAsync();
+    }
+
+    [Test]
+    public async Task InternalConstructor_NoDiagnostic()
+    {
+        var test = CreateTest(
+            """
+            public class MyService
+            {
+                private readonly int _id;
+
+                internal MyService(int id)
+                {
+                    _id = id;
+                }
             }
             """
         );

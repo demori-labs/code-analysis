@@ -68,29 +68,56 @@ public sealed class UsePrimaryConstructorAnalyzer : DiagnosticAnalyzer
         if (AnnotationAttributes.HasMutableAttribute(typeSymbol))
             return;
 
-        var explicitConstructors = typeSymbol.Constructors.Where(static c =>
-            c is { IsImplicitlyDeclared: false, IsStatic: false }
-        );
-
-        var constructorCount = 0;
-        foreach (var _ in explicitConstructors)
-        {
-            constructorCount++;
-            if (constructorCount > 1)
-                return;
-        }
-
-        if (constructorCount is not 1)
-            return;
-
         var constructorSymbol = context.SemanticModel.GetDeclaredSymbol(constructorSyntax, context.CancellationToken);
         if (constructorSymbol is null || constructorSymbol.Parameters.Length is 0)
+            return;
+
+        // Primary constructors are always public — skip non-public constructors
+        // to avoid widening accessibility
+        if (constructorSymbol.DeclaredAccessibility is not Accessibility.Public)
             return;
 
         if (IsValidMemberAssignmentConstructor(constructorSyntax, constructorSymbol, typeSymbol, context) is false)
             return;
 
+        // All other constructors must chain to this one via : this(...)
+        if (AllOtherConstructorsChainTo(constructorSymbol, typeSymbol, context) is false)
+            return;
+
         context.ReportDiagnostic(Diagnostic.Create(Rule, constructorSyntax.Identifier.GetLocation(), typeSymbol.Name));
+    }
+
+    private static bool AllOtherConstructorsChainTo(
+        IMethodSymbol targetConstructor,
+        INamedTypeSymbol containingType,
+        SyntaxNodeAnalysisContext context
+    )
+    {
+        foreach (var ctor in containingType.Constructors)
+        {
+            if (ctor.IsImplicitlyDeclared || ctor.IsStatic)
+                continue;
+
+            if (SymbolEqualityComparer.Default.Equals(ctor, targetConstructor))
+                continue;
+
+            // Check that this constructor chains to the target via : this(...)
+            foreach (var syntaxRef in ctor.DeclaringSyntaxReferences)
+            {
+                var ctorSyntax = syntaxRef.GetSyntax(context.CancellationToken) as ConstructorDeclarationSyntax;
+                if (ctorSyntax?.Initializer is not { } initializer)
+                    return false;
+
+                if (initializer.ThisOrBaseKeyword.Kind() is not SyntaxKind.ThisKeyword)
+                    return false;
+
+                var initSymbol = context.SemanticModel.GetSymbolInfo(initializer, context.CancellationToken).Symbol;
+                if (SymbolEqualityComparer.Default.Equals(initSymbol, targetConstructor) is false)
+                    return false;
+            }
+        }
+
+        return true;
     }
 
     private static bool IsValidMemberAssignmentConstructor(

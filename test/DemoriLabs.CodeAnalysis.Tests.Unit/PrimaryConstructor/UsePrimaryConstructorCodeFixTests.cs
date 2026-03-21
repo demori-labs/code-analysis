@@ -542,6 +542,80 @@ public class UsePrimaryConstructorCodeFixTests
     }
 
     [Test]
+    public async Task ReadOnlyStruct_NoReadOnlyAttribute()
+    {
+        var test = CreateTest(
+            """
+            public readonly struct Point
+            {
+                private readonly int _x;
+                private readonly int _y;
+
+                public {|DL1005:Point|}(int x, int y)
+                {
+                    _x = x;
+                    _y = y;
+                }
+
+                public int Sum() => _x + _y;
+            }
+            """,
+            """
+            public readonly struct Point(
+                int x,
+                int y
+            )
+            {
+                public int Sum() => x + y;
+            }
+            """
+        );
+
+        await test.RunAsync();
+    }
+
+    [Test]
+    public async Task MultipleConstructors_KeepsSecondaryConstructors()
+    {
+        var test = CreateTest(
+            """
+            public class MyService
+            {
+                private readonly int _id;
+                private readonly string _name;
+
+                public {|DL1005:MyService|}(int id, string name)
+                {
+                    _id = id;
+                    _name = name;
+                }
+
+                public MyService(int id) : this(id, "default") { }
+                public MyService() : this(0, "default") { }
+
+                public string GetName() => _name;
+            }
+            """,
+            """
+            using DemoriLabs.CodeAnalysis.Attributes;
+
+            public class MyService(
+                [ReadOnly] int id,
+                [ReadOnly] string name
+            )
+            {
+                public MyService(int id) : this(id, "default") { }
+                public MyService() : this(0, "default") { }
+
+                public string GetName() => name;
+            }
+            """
+        );
+
+        await test.RunAsync();
+    }
+
+    [Test]
     public async Task PreservesExistingParameterAttributes()
     {
         var test = CreateTest(

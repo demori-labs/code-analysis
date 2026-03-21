@@ -124,7 +124,9 @@ public sealed class UsePrimaryConstructorCodeFix : CodeFixProvider
             }
         }
 
-        var primaryParams = BuildPrimaryConstructorParameters(currentConstructor);
+        var isReadOnlyStruct =
+            currentTypeDecl is StructDeclarationSyntax && currentTypeDecl.Modifiers.Any(SyntaxKind.ReadOnlyKeyword);
+        var primaryParams = BuildPrimaryConstructorParameters(currentConstructor, isReadOnlyStruct);
         var parameterList = FormatParameterList(
             primaryParams,
             currentTypeDecl,
@@ -138,8 +140,16 @@ public sealed class UsePrimaryConstructorCodeFix : CodeFixProvider
         var membersWithoutConstructor = new SyntaxList<MemberDeclarationSyntax>();
         foreach (var member in rewrittenType.Members)
         {
-            if (member is ConstructorDeclarationSyntax)
+            // Only remove the main constructor, keep secondary ones that chain via : this(...)
+            if (
+                member is ConstructorDeclarationSyntax ctor
+                && ctor.Identifier.Text == constructorDecl.Identifier.Text
+                && ctor.ParameterList.Parameters.Count == constructorDecl.ParameterList.Parameters.Count
+                && ctor.Initializer?.ThisOrBaseKeyword.Kind() is not SyntaxKind.ThisKeyword
+            )
+            {
                 continue;
+            }
 
             membersWithoutConstructor = membersWithoutConstructor.Add(member);
         }
@@ -221,7 +231,10 @@ public sealed class UsePrimaryConstructorCodeFix : CodeFixProvider
             currentTypeDecl,
             newTypeDecl.WithAdditionalAnnotations(Formatter.Annotation)
         );
-        newRoot = newRoot.EnsureUsingDirective(currentSemanticModel, "DemoriLabs.CodeAnalysis.Attributes");
+        if (isReadOnlyStruct is false)
+        {
+            newRoot = newRoot.EnsureUsingDirective(currentSemanticModel, "DemoriLabs.CodeAnalysis.Attributes");
+        }
 
         return currentSolution.WithDocumentSyntaxRoot(document.Id, newRoot);
     }
@@ -294,8 +307,25 @@ public sealed class UsePrimaryConstructorCodeFix : CodeFixProvider
         return result;
     }
 
-    private static List<ParameterSyntax> BuildPrimaryConstructorParameters(ConstructorDeclarationSyntax constructorDecl)
+    private static List<ParameterSyntax> BuildPrimaryConstructorParameters(
+        ConstructorDeclarationSyntax constructorDecl,
+        bool isReadOnlyStruct
+    )
     {
+        // Readonly struct parameters are already readonly — don't add [ReadOnly]
+        if (isReadOnlyStruct)
+        {
+            return
+            [
+                .. constructorDecl.ParameterList.Parameters.Select(static param =>
+                    SyntaxFactory
+                        .Parameter(param.Identifier)
+                        .WithType(param.Type)
+                        .WithAttributeLists(param.AttributeLists)
+                ),
+            ];
+        }
+
         var readOnlyAttribute = SyntaxFactory.Attribute(SyntaxFactory.IdentifierName("ReadOnly"));
         var readOnlyAttrList = SyntaxFactory
             .AttributeList(SyntaxFactory.SingletonSeparatedList(readOnlyAttribute))
