@@ -249,6 +249,80 @@ public class DataClassCouldBeRecordAnalyzerTests
     }
 
     [Test]
+    public async Task ClassImplementingInterfaceWithMutableProperty_NoDiagnostic()
+    {
+        var test = CreateTest(
+            """
+            public interface IEntity
+            {
+                int Id { get; set; }
+            }
+
+            public class Person : IEntity
+            {
+                public int Id { get; set; }
+                public string Name { get; set; }
+            }
+            """
+        );
+
+        await test.RunAsync();
+    }
+
+    [Test]
+    public async Task ClassImplementingInterfaceWithMethod_NoDiagnostic()
+    {
+        var test = CreateTest(
+            """
+            public interface IHandler
+            {
+                int Id { get; }
+                void Execute();
+            }
+
+            public class MyHandler : IHandler
+            {
+                public int Id { get; set; }
+                public void Execute() { }
+            }
+            """
+        );
+
+        await test.RunAsync();
+    }
+
+    [Test]
+    public async Task ClassWithRecordSynthesisableMethods_ReportsDiagnostic()
+    {
+        var test = CreateTest(
+            """
+            using System;
+
+            public class {|DL1004:Person|} : IEquatable<Person>
+            {
+                public string Name { get; set; }
+                public int Age { get; set; }
+
+                public override bool Equals(object? obj) => Equals(obj as Person);
+                public bool Equals(Person? other) => other is not null && Name == other.Name;
+                public override int GetHashCode() => HashCode.Combine(Name, Age);
+                public static bool operator ==(Person? left, Person? right) => Equals(left, right);
+                public static bool operator !=(Person? left, Person? right) => !Equals(left, right);
+                public override string ToString() => $"Person {{ Name = {Name} }}";
+
+                public void Deconstruct(out string name, out int age)
+                {
+                    name = Name;
+                    age = Age;
+                }
+            }
+            """
+        );
+
+        await test.RunAsync();
+    }
+
+    [Test]
     public async Task PartialClass_NoDiagnostic()
     {
         var test = CreateTest(
