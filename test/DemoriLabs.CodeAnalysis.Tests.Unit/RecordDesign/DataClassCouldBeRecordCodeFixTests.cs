@@ -367,6 +367,52 @@ public class DataClassCouldBeRecordCodeFixTests
     }
 
     [Test]
+    public async Task PrimaryConstructorCallSite_RewrittenToObjectInitializer()
+    {
+        var test = CreateTest(
+            """
+            using DemoriLabs.CodeAnalysis.Attributes;
+
+            public class {|DL1004:Event|}(
+                [ReadOnly] int orderId
+            )
+            {
+                public int OrderId { get; } = orderId;
+            }
+
+            public class Consumer
+            {
+                public void M()
+                {
+                    var e = new Event(42);
+                }
+            }
+            """,
+            """
+            using DemoriLabs.CodeAnalysis.Attributes;
+
+            public sealed record Event
+            {
+                public required int OrderId { get; init; }
+            }
+
+            public class Consumer
+            {
+                public void M()
+                {
+                    var e = new Event
+                    {
+                        OrderId = 42
+                    };
+                }
+            }
+            """
+        );
+
+        await test.RunAsync();
+    }
+
+    [Test]
     public async Task ClassWithPrimaryConstructor_RemovesParametersAndInitializers()
     {
         var test = CreateTest(

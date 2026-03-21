@@ -79,53 +79,54 @@ public sealed class DataClassCouldBeRecordCodeFix : CodeFixProvider
         var callSiteAnnotation = new SyntaxAnnotation("DL1004_CallSite");
         var otherDocCallSites = new Dictionary<DocumentId, List<SyntaxNode>>();
 
-        if (constructor is not null && ctorParamToProperty.Count > 0)
+        // Find the constructor symbol — either explicit or primary
+        var ctorSymbolToFind = constructor is not null
+            ? semanticModel.GetDeclaredSymbol(constructor, ct)
+            : FindPrimaryConstructorSymbol(typeSymbol, ct);
+
+        if (ctorSymbolToFind is not null)
         {
-            var ctorSymbol = semanticModel.GetDeclaredSymbol(constructor, ct);
-            if (ctorSymbol is not null)
+            var references = await SymbolFinder
+                .FindReferencesAsync(ctorSymbolToFind, document.Project.Solution, ct)
+                .ConfigureAwait(false);
+
+            var sameDocCreations = new List<ObjectCreationExpressionSyntax>();
+
+            foreach (var reference in references)
             {
-                var references = await SymbolFinder
-                    .FindReferencesAsync(ctorSymbol, document.Project.Solution, ct)
-                    .ConfigureAwait(false);
-
-                var sameDocCreations = new List<ObjectCreationExpressionSyntax>();
-
-                foreach (var reference in references)
+                foreach (var location in reference.Locations)
                 {
-                    foreach (var location in reference.Locations)
+                    if (location.Document.Id == document.Id)
                     {
-                        if (location.Document.Id == document.Id)
+                        var callNode = root.FindNode(location.Location.SourceSpan);
+                        var creation = callNode.FirstAncestorOrSelf<ObjectCreationExpressionSyntax>();
+                        if (creation?.ArgumentList is { Arguments.Count: > 0 })
+                            sameDocCreations.Add(creation);
+                    }
+                    else
+                    {
+                        if (!otherDocCallSites.TryGetValue(location.Document.Id, out var docList))
                         {
-                            var callNode = root.FindNode(location.Location.SourceSpan);
-                            var creation = callNode.FirstAncestorOrSelf<ObjectCreationExpressionSyntax>();
-                            if (creation?.ArgumentList is { Arguments.Count: > 0 })
-                                sameDocCreations.Add(creation);
+                            docList = [];
+                            otherDocCallSites[location.Document.Id] = docList;
                         }
-                        else
-                        {
-                            if (!otherDocCallSites.TryGetValue(location.Document.Id, out var docList))
-                            {
-                                docList = [];
-                                otherDocCallSites[location.Document.Id] = docList;
-                            }
 
-                            var sourceRoot = await location.Location.SourceTree!.GetRootAsync(ct).ConfigureAwait(false);
-                            docList.Add(sourceRoot.FindNode(location.Location.SourceSpan));
-                        }
+                        var sourceRoot = await location.Location.SourceTree!.GetRootAsync(ct).ConfigureAwait(false);
+                        docList.Add(sourceRoot.FindNode(location.Location.SourceSpan));
                     }
                 }
+            }
 
-                if (sameDocCreations.Count > 0)
-                {
-                    root = root.ReplaceNodes(
-                        sameDocCreations,
-                        (_, rewritten) => rewritten.WithAdditionalAnnotations(callSiteAnnotation)
-                    );
-                    classDecl = root.DescendantNodes()
-                        .OfType<ClassDeclarationSyntax>()
-                        .First(c => c.Identifier.Text == classDecl.Identifier.Text);
-                    constructor = FindSingleConstructor(classDecl);
-                }
+            if (sameDocCreations.Count > 0)
+            {
+                root = root.ReplaceNodes(
+                    sameDocCreations,
+                    (_, rewritten) => rewritten.WithAdditionalAnnotations(callSiteAnnotation)
+                );
+                classDecl = root.DescendantNodes()
+                    .OfType<ClassDeclarationSyntax>()
+                    .First(c => c.Identifier.Text == classDecl.Identifier.Text);
+                constructor = FindSingleConstructor(classDecl);
             }
         }
 
@@ -149,6 +150,21 @@ public sealed class DataClassCouldBeRecordCodeFix : CodeFixProvider
             foreach (var param in classDecl.ParameterList.Parameters)
             {
                 primaryCtorParamNames.Add(param.Identifier.Text);
+            }
+
+            // Build parameter names for call site rewriting from primary constructor
+            if (constructor is null)
+            {
+                foreach (var member in classDecl.Members)
+                {
+                    if (
+                        member is PropertyDeclarationSyntax prop
+                        && IsInitialisedFromPrimaryConstructor(prop, primaryCtorParamNames)
+                    )
+                    {
+                        parameterNames.Add(prop.Identifier.Text);
+                    }
+                }
             }
         }
 
@@ -280,6 +296,24 @@ public sealed class DataClassCouldBeRecordCodeFix : CodeFixProvider
         }
 
         return currentSolution;
+    }
+
+    private static IMethodSymbol? FindPrimaryConstructorSymbol(INamedTypeSymbol typeSymbol, CancellationToken ct)
+    {
+        foreach (var ctor in typeSymbol.Constructors)
+        {
+            if (ctor.IsImplicitlyDeclared || ctor.IsStatic)
+                continue;
+
+            var isPrimary = ctor.DeclaringSyntaxReferences.All(r =>
+                r.GetSyntax(ct) is not ConstructorDeclarationSyntax
+            );
+
+            if (isPrimary)
+                return ctor;
+        }
+
+        return null;
     }
 
     private static ConstructorDeclarationSyntax? FindSingleConstructor(ClassDeclarationSyntax classDecl)
