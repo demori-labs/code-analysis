@@ -142,8 +142,8 @@ public sealed class UsePrimaryConstructorAnalyzer : DiagnosticAnalyzer
             if (SymbolEqualityComparer.Default.Equals(leftSymbol.ContainingType, containingType) is false)
                 return false;
 
-            if (isClass && IsReadOnlyMember(leftSymbol) is false)
-                return false;
+            // Structs allow any member. For classes, non-readonly private fields
+            // are kept with an initialiser (not removed), so they're also allowed.
 
             var rightSymbol = semanticModel.GetSymbolInfo(assignment.Right, context.CancellationToken).Symbol;
             if (rightSymbol is not IParameterSymbol paramSymbol)
@@ -156,16 +156,6 @@ public sealed class UsePrimaryConstructorAnalyzer : DiagnosticAnalyzer
         }
 
         return accountedParameters.Count == parameterSymbols.Length;
-    }
-
-    private static bool IsReadOnlyMember(ISymbol symbol)
-    {
-        return symbol switch
-        {
-            IFieldSymbol field => field.IsReadOnly,
-            IPropertySymbol property => property.SetMethod is null or { IsInitOnly: true },
-            _ => false,
-        };
     }
 
     private static ISymbol? ResolveMemberSymbol(

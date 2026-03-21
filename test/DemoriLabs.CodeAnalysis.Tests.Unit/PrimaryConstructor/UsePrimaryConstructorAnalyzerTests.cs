@@ -234,18 +234,21 @@ public class UsePrimaryConstructorAnalyzerTests
     }
 
     [Test]
-    public async Task ConstructorAssignsToMutableProperty_NoDiagnostic()
+    public async Task ConstructorAssignsToNonReadonlyPrivateField_ReportsDiagnostic()
     {
         var test = CreateTest(
             """
-            public class OrderHandler
+            public class Counter
             {
-                public int OrderId { get; set; }
+                private int _count;
 
-                public OrderHandler(int orderId)
+                public {|DL1005:Counter|}(int count)
                 {
-                    OrderId = orderId;
+                    _count = count;
                 }
+
+                public void Increment() => _count++;
+                public int GetCount() => _count;
             }
             """
         );
@@ -254,17 +257,17 @@ public class UsePrimaryConstructorAnalyzerTests
     }
 
     [Test]
-    public async Task ConstructorAssignsNonReadonlyField_NoDiagnostic()
+    public async Task ConstructorAssignsToMutableProperty_ReportsDiagnostic()
     {
         var test = CreateTest(
             """
-            public class MyService
+            public class OrderHandler
             {
-                private int _id;
+                public int OrderId { get; set; }
 
-                public MyService(int id)
+                public {|DL1005:OrderHandler|}(int orderId)
                 {
-                    _id = id;
+                    OrderId = orderId;
                 }
             }
             """

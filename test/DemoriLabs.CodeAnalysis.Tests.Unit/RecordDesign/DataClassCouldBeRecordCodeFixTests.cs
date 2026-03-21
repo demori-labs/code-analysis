@@ -40,7 +40,7 @@ public class DataClassCouldBeRecordCodeFixTests
             }
             """,
             """
-            public record Person
+            public sealed record Person
             {
                 public required string Name { get; init; }
                 public required int Age { get; init; }
@@ -63,7 +63,7 @@ public class DataClassCouldBeRecordCodeFixTests
             }
             """,
             """
-            public record Person
+            public sealed record Person
             {
                 public required string Name { get; init; }
                 public required int Age { get; init; }
@@ -86,7 +86,7 @@ public class DataClassCouldBeRecordCodeFixTests
             }
             """,
             """
-            public record Config
+            public sealed record Config
             {
                 public required string Name { get; init; }
                 public int Retries { get; init; } = 3;
@@ -109,7 +109,7 @@ public class DataClassCouldBeRecordCodeFixTests
             }
             """,
             """
-            public record Person
+            public sealed record Person
             {
                 public required string Name { get; init; }
                 public string Upper => Name.ToUpper();
@@ -136,7 +136,7 @@ public class DataClassCouldBeRecordCodeFixTests
             }
             """,
             """
-            public record Person
+            public sealed record Person
             {
                 public required string Name { get; init; }
             }
@@ -164,7 +164,7 @@ public class DataClassCouldBeRecordCodeFixTests
             }
             """,
             """
-            public record Event
+            public sealed record Event
             {
                 public required int OrderId { get; init; }
                 public required string Description { get; init; }
@@ -193,7 +193,7 @@ public class DataClassCouldBeRecordCodeFixTests
             }
             """,
             """
-            public record Config
+            public sealed record Config
             {
                 public int Retries { get; init; } = 3;
                 public string Env { get; init; } = "prod";
@@ -230,7 +230,7 @@ public class DataClassCouldBeRecordCodeFixTests
             }
             """,
             """
-            public record Event
+            public sealed record Event
             {
                 public required int Id { get; init; }
                 public required string Name { get; init; }
@@ -313,6 +313,66 @@ public class DataClassCouldBeRecordCodeFixTests
     }
 
     [Test]
+    public async Task PreservesStaticMethods()
+    {
+        var test = CreateTest(
+            """
+            public class {|DL1004:Person|}
+            {
+                public string Name { get; set; }
+
+                public Person(string name) { Name = name; }
+
+                public static Person Default() => new Person("Unknown");
+            }
+            """,
+            """
+            public sealed record Person
+            {
+                public required string Name { get; init; }
+
+                public static Person Default() => new Person
+                {
+                    Name = "Unknown"
+                };
+            }
+            """
+        );
+
+        await test.RunAsync();
+    }
+
+    [Test]
+    public async Task ClassWithPrimaryConstructor_RemovesParametersAndInitializers()
+    {
+        var test = CreateTest(
+            """
+            using DemoriLabs.CodeAnalysis.Attributes;
+
+            public class {|DL1004:Event|}(
+                [ReadOnly] int orderId,
+                [ReadOnly] string name
+            )
+            {
+                public int OrderId { get; } = orderId;
+                public string Name { get; } = name;
+            }
+            """,
+            """
+            using DemoriLabs.CodeAnalysis.Attributes;
+
+            public sealed record Event
+            {
+                public required int OrderId { get; init; }
+                public required string Name { get; init; }
+            }
+            """
+        );
+
+        await test.RunAsync();
+    }
+
+    [Test]
     public async Task GenericClass_ConvertsToRecord()
     {
         var test = CreateTest(
@@ -323,7 +383,7 @@ public class DataClassCouldBeRecordCodeFixTests
             }
             """,
             """
-            public record Wrapper<T>
+            public sealed record Wrapper<T>
             {
                 public required T Value { get; init; }
             }

@@ -74,9 +74,9 @@ public sealed class UsePrimaryConstructorCodeFix : CodeFixProvider
 
         foreach (var kvp in memberToParamMap)
         {
-            // Only rename private fields — properties keep their PascalCase names
+            // Only rename private readonly fields (they get removed and replaced by the parameter)
             if (
-                kvp.Key is IFieldSymbol { DeclaredAccessibility: Accessibility.Private } fieldSymbol
+                kvp.Key is IFieldSymbol { DeclaredAccessibility: Accessibility.Private, IsReadOnly: true } fieldSymbol
                 && string.Equals(fieldSymbol.Name, kvp.Value, StringComparison.Ordinal) is false
             )
             {
@@ -111,12 +111,12 @@ public sealed class UsePrimaryConstructorCodeFix : CodeFixProvider
         {
             switch (kvp.Key)
             {
-                case IFieldSymbol { DeclaredAccessibility: Accessibility.Private } privateField:
-                    fieldSymbolToParamName[privateField] = kvp.Value;
-                    fieldsToRemove.Add(privateField.Name);
+                case IFieldSymbol { DeclaredAccessibility: Accessibility.Private, IsReadOnly: true } readonlyField:
+                    fieldSymbolToParamName[readonlyField] = kvp.Value;
+                    fieldsToRemove.Add(readonlyField.Name);
                     break;
-                case IFieldSymbol nonPrivateField:
-                    nonPrivateFieldToParam[nonPrivateField.Name] = kvp.Value;
+                case IFieldSymbol field:
+                    nonPrivateFieldToParam[field.Name] = kvp.Value;
                     break;
                 case IPropertySymbol property:
                     propertyToParam[property.Name] = kvp.Value;

@@ -397,6 +397,80 @@ public class UsePrimaryConstructorCodeFixTests
     }
 
     [Test]
+    public async Task KeepsNonReadonlyPrivateFieldWithInitialiser()
+    {
+        var test = CreateTest(
+            """
+            public class Counter
+            {
+                private int _count;
+
+                public {|DL1005:Counter|}(int count)
+                {
+                    _count = count;
+                }
+
+                public void Increment() => _count++;
+                public int GetCount() => _count;
+            }
+            """,
+            """
+            using DemoriLabs.CodeAnalysis.Attributes;
+
+            public class Counter(
+                [ReadOnly] int count
+            )
+            {
+                private int _count = count;
+
+                public void Increment() => _count++;
+                public int GetCount() => _count;
+            }
+            """
+        );
+
+        await test.RunAsync();
+    }
+
+    [Test]
+    public async Task ConvertsMutablePropertyAssignments()
+    {
+        var test = CreateTest(
+            """
+            public class Handler
+            {
+                public int OrderId { get; }
+                public string Items { get; set; }
+
+                public {|DL1005:Handler|}(int orderId, string items)
+                {
+                    OrderId = orderId;
+                    Items = items;
+                }
+
+                public void DoWork() { }
+            }
+            """,
+            """
+            using DemoriLabs.CodeAnalysis.Attributes;
+
+            public class Handler(
+                [ReadOnly] int orderId,
+                [ReadOnly] string items
+            )
+            {
+                public int OrderId { get; } = orderId;
+                public string Items { get; set; } = items;
+
+                public void DoWork() { }
+            }
+            """
+        );
+
+        await test.RunAsync();
+    }
+
+    [Test]
     public async Task ConvertsMixOfFieldsAndPropertiesToPrimaryConstructor()
     {
         var test = CreateTest(

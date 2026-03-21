@@ -142,6 +142,16 @@ public sealed class DataClassCouldBeRecordCodeFix : CodeFixProvider
             }
         }
 
+        // Detect properties initialised from primary constructor parameters
+        var primaryCtorParamNames = new HashSet<string>();
+        if (classDecl.ParameterList is not null)
+        {
+            foreach (var param in classDecl.ParameterList.Parameters)
+            {
+                primaryCtorParamNames.Add(param.Identifier.Text);
+            }
+        }
+
         // Convert the class to a record
         var newMembers = new List<MemberDeclarationSyntax>();
         var assignedPropertyNames = new HashSet<string>(ctorParamToProperty.Values.Select(static a => a.PropertyName));
@@ -162,9 +172,18 @@ public sealed class DataClassCouldBeRecordCodeFix : CodeFixProvider
             MemberDeclarationSyntax kept;
             if (member is PropertyDeclarationSyntax property)
             {
-                kept = assignedPropertyNames.Contains(property.Identifier.Text)
-                    ? ConvertConstructorAssignedProperty(property, ctorParamToProperty)
-                    : ConvertPropertyToImmutable(property);
+                if (assignedPropertyNames.Contains(property.Identifier.Text))
+                {
+                    kept = ConvertConstructorAssignedProperty(property, ctorParamToProperty);
+                }
+                else if (IsInitialisedFromPrimaryConstructor(property, primaryCtorParamNames))
+                {
+                    kept = ConvertPrimaryCtorInitialisedProperty(property);
+                }
+                else
+                {
+                    kept = ConvertPropertyToImmutable(property);
+                }
             }
             else
             {
@@ -183,10 +202,9 @@ public sealed class DataClassCouldBeRecordCodeFix : CodeFixProvider
             newMembers.Add(kept);
         }
 
-        // Add sealed modifier when removing record-synthesisable members
+        // Always seal the record
         var modifiers = classDecl.Modifiers;
-        var hasRemovedMembers = classDecl.Members.Any(IsMemberRemovedByRecordConversion);
-        if (hasRemovedMembers && modifiers.Any(SyntaxKind.SealedKeyword) is false)
+        if (modifiers.Any(SyntaxKind.SealedKeyword) is false)
         {
             var sealedToken = SyntaxFactory.Token(SyntaxKind.SealedKeyword).WithTrailingTrivia(SyntaxFactory.Space);
             var insertIndex = modifiers.IndexOf(SyntaxKind.PublicKeyword);
@@ -498,6 +516,34 @@ public sealed class DataClassCouldBeRecordCodeFix : CodeFixProvider
             .NormalizeWhitespace("    ", "\n")
             .WithLeadingTrivia(creation.GetLeadingTrivia())
             .WithTrailingTrivia(creation.GetTrailingTrivia());
+    }
+
+    private static bool IsInitialisedFromPrimaryConstructor(
+        PropertyDeclarationSyntax property,
+        HashSet<string> primaryCtorParamNames
+    )
+    {
+        return primaryCtorParamNames.Count > 0
+            && property.Initializer?.Value is IdentifierNameSyntax identifier
+            && primaryCtorParamNames.Contains(identifier.Identifier.Text);
+    }
+
+    private static PropertyDeclarationSyntax ConvertPrimaryCtorInitialisedProperty(PropertyDeclarationSyntax property)
+    {
+        var newProperty = EnsureGetInit(property).WithInitializer(null).WithSemicolonToken(default);
+
+        if (property.Modifiers.Any(m => m.IsKind(SyntaxKind.RequiredKeyword)) is false)
+        {
+            var requiredToken = SyntaxFactory.Token(SyntaxKind.RequiredKeyword).WithTrailingTrivia(SyntaxFactory.Space);
+
+            var publicIndex = newProperty.Modifiers.IndexOf(SyntaxKind.PublicKeyword);
+            newProperty =
+                publicIndex >= 0
+                    ? newProperty.WithModifiers(newProperty.Modifiers.Insert(publicIndex + 1, requiredToken))
+                    : newProperty.AddModifiers(requiredToken);
+        }
+
+        return newProperty;
     }
 
     private static bool IsMemberRemovedByRecordConversion(MemberDeclarationSyntax member)

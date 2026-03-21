@@ -54,7 +54,7 @@ public class SuggestReadOnlyPrimaryConstructorParameterAnalyzerTests
             """
             using DemoriLabs.CodeAnalysis.Attributes;
 
-            public class Widget([ReadOnly] int count);
+            public class Widget([ReadOnly] int count, [Mutable] int mutableCount);
             """
         );
 
@@ -86,11 +86,27 @@ public class SuggestReadOnlyPrimaryConstructorParameterAnalyzerTests
     }
 
     [Test]
-    public async Task StructPrimaryConstructor_NoDiagnostic()
+    public async Task StructPrimaryConstructor_ReportsDiagnostic()
     {
         var test = CreateTest(
             """
-            public struct Point(int x, int y)
+            public struct Point(int {|DL2003:x|}, int {|DL2003:y|})
+            {
+                public int X { get; } = x;
+                public int Y { get; } = y;
+            }
+            """
+        );
+
+        await test.RunAsync();
+    }
+
+    [Test]
+    public async Task ReadOnlyStructPrimaryConstructor_NoDiagnostic()
+    {
+        var test = CreateTest(
+            """
+            public readonly struct Point(int x, int y)
             {
                 public int X { get; } = x;
                 public int Y { get; } = y;
@@ -125,6 +141,76 @@ public class SuggestReadOnlyPrimaryConstructorParameterAnalyzerTests
             {
                 public int Count { get; } = count;
             }
+            """
+        );
+
+        await test.RunAsync();
+    }
+
+    [Test]
+    public async Task ClassPrimaryConstructor_MutableParameter_NoDiagnostic()
+    {
+        var test = CreateTest(
+            """
+            using DemoriLabs.CodeAnalysis.Attributes;
+
+            public class Widget([Mutable] int count);
+            """
+        );
+
+        await test.RunAsync();
+    }
+
+    [Test]
+    public async Task StructPrimaryConstructor_MutableParameter_NoDiagnostic()
+    {
+        var test = CreateTest(
+            """
+            using DemoriLabs.CodeAnalysis.Attributes;
+
+            public struct Widget([Mutable] int count);
+            """
+        );
+
+        await test.RunAsync();
+    }
+
+    [Test]
+    public async Task RecordClass_MutableParameter_ReportsError()
+    {
+        var test = CreateTest(
+            """
+            using DemoriLabs.CodeAnalysis.Attributes;
+
+            public record Widget([{|DL2004:Mutable|}] int count);
+            """
+        );
+
+        await test.RunAsync();
+    }
+
+    [Test]
+    public async Task ReadOnlyStruct_MutableParameter_ReportsError()
+    {
+        var test = CreateTest(
+            """
+            using DemoriLabs.CodeAnalysis.Attributes;
+
+            public readonly struct Widget([{|DL2004:Mutable|}] int count);
+            """
+        );
+
+        await test.RunAsync();
+    }
+
+    [Test]
+    public async Task ReadOnlyRecordStruct_MutableParameter_ReportsError()
+    {
+        var test = CreateTest(
+            """
+            using DemoriLabs.CodeAnalysis.Attributes;
+
+            public readonly record struct Widget([{|DL2004:Mutable|}] int count);
             """
         );
 

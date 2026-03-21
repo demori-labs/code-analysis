@@ -96,6 +96,76 @@ public class DataClassCouldBeRecordAnalyzerTests
     }
 
     [Test]
+    public async Task ClassWithStaticMethod_ReportsDiagnostic()
+    {
+        var test = CreateTest(
+            """
+            public class {|DL1004:Person|}
+            {
+                public string Name { get; set; }
+
+                public static Person Create(string name) => new Person { Name = name };
+            }
+            """
+        );
+
+        await test.RunAsync();
+    }
+
+    [Test]
+    public async Task ClassWithStaticFactoryAndConstructor_ReportsDiagnostic()
+    {
+        var test = CreateTest(
+            """
+            public class {|DL1004:Person|}
+            {
+                public string Name { get; set; }
+
+                public Person(string name) { Name = name; }
+
+                public static Person Default() => new Person("Unknown");
+            }
+            """
+        );
+
+        await test.RunAsync();
+    }
+
+    [Test]
+    public async Task ClassWithDestructor_NoDiagnostic()
+    {
+        var test = CreateTest(
+            """
+            public class Resource
+            {
+                public string Name { get; set; }
+
+                ~Resource() { }
+            }
+            """
+        );
+
+        await test.RunAsync();
+    }
+
+    [Test]
+    public async Task ClassWithConversionOperator_NoDiagnostic()
+    {
+        var test = CreateTest(
+            """
+            public class Temperature
+            {
+                public double Value { get; set; }
+
+                public static implicit operator double(Temperature t) => t.Value;
+            }
+            """
+        );
+
+        await test.RunAsync();
+    }
+
+    [Test]
     public async Task ClassWithField_NoDiagnostic()
     {
         var test = CreateTest(

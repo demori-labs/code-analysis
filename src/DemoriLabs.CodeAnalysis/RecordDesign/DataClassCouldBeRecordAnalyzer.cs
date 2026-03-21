@@ -131,6 +131,9 @@ public sealed class DataClassCouldBeRecordAnalyzer : DiagnosticAnalyzer
         if (method.MethodKind is not MethodKind.Ordinary)
             return false;
 
+        if (method.IsStatic)
+            return false;
+
         return IsRecordSynthesisableMethod(method) is false;
     }
 
