@@ -66,24 +66,22 @@ public sealed class UsePrimaryConstructorCodeFix : CodeFixProvider
         if (semanticModel is null || constructorDecl.Parent is not TypeDeclarationSyntax)
             return document.Project.Solution;
 
-        var fieldToParamMap = BuildFieldToParameterMap(constructorDecl, semanticModel, ct);
-        if (fieldToParamMap.Count is 0 && constructorDecl.ParameterList.Parameters.Count is 0)
+        var memberToParamMap = BuildMemberToParameterMap(constructorDecl, semanticModel, ct);
+        if (memberToParamMap.Count is 0 && constructorDecl.ParameterList.Parameters.Count is 0)
             return document.Project.Solution;
 
         var currentSolution = document.Project.Solution;
 
-        foreach (var kvp in fieldToParamMap)
+        foreach (var kvp in memberToParamMap)
         {
-            var fieldSymbol = kvp.Key;
-            var paramName = kvp.Value;
-
+            // Only rename private fields — properties keep their PascalCase names
             if (
-                string.Equals(fieldSymbol.Name, paramName, StringComparison.Ordinal) is false
-                && fieldSymbol.DeclaredAccessibility is Accessibility.Private
+                kvp.Key is IFieldSymbol { DeclaredAccessibility: Accessibility.Private } fieldSymbol
+                && string.Equals(fieldSymbol.Name, kvp.Value, StringComparison.Ordinal) is false
             )
             {
                 currentSolution = await Renamer
-                    .RenameSymbolAsync(currentSolution, fieldSymbol, new SymbolRenameOptions(), paramName, ct)
+                    .RenameSymbolAsync(currentSolution, fieldSymbol, new SymbolRenameOptions(), kvp.Value, ct)
                     .ConfigureAwait(false);
             }
         }
@@ -102,22 +100,27 @@ public sealed class UsePrimaryConstructorCodeFix : CodeFixProvider
         if (currentConstructor is null || currentConstructor.Parent is not TypeDeclarationSyntax currentTypeDecl)
             return currentSolution;
 
-        var currentFieldMap = BuildFieldToParameterMap(currentConstructor, currentSemanticModel, ct);
+        var currentMemberMap = BuildMemberToParameterMap(currentConstructor, currentSemanticModel, ct);
 
         var fieldSymbolToParamName = new Dictionary<IFieldSymbol, string>(SymbolEqualityComparer.Default);
         var nonPrivateFieldToParam = new Dictionary<string, string>();
+        var propertyToParam = new Dictionary<string, string>();
         var fieldsToRemove = new HashSet<string>();
 
-        foreach (var kvp in currentFieldMap)
+        foreach (var kvp in currentMemberMap)
         {
-            if (kvp.Key.DeclaredAccessibility is Accessibility.Private)
+            switch (kvp.Key)
             {
-                fieldSymbolToParamName[kvp.Key] = kvp.Value;
-                fieldsToRemove.Add(kvp.Key.Name);
-            }
-            else
-            {
-                nonPrivateFieldToParam[kvp.Key.Name] = kvp.Value;
+                case IFieldSymbol { DeclaredAccessibility: Accessibility.Private } privateField:
+                    fieldSymbolToParamName[privateField] = kvp.Value;
+                    fieldsToRemove.Add(privateField.Name);
+                    break;
+                case IFieldSymbol nonPrivateField:
+                    nonPrivateFieldToParam[nonPrivateField.Name] = kvp.Value;
+                    break;
+                case IPropertySymbol property:
+                    propertyToParam[property.Name] = kvp.Value;
+                    break;
             }
         }
 
@@ -178,6 +181,19 @@ public sealed class UsePrimaryConstructorCodeFix : CodeFixProvider
                 continue;
             }
 
+            if (
+                member is PropertyDeclarationSyntax propDecl
+                && propertyToParam.TryGetValue(propDecl.Identifier.Text, out var propParamName)
+            )
+            {
+                finalMembers = finalMembers.Add(
+                    propDecl
+                        .WithInitializer(SyntaxFactory.EqualsValueClause(SyntaxFactory.IdentifierName(propParamName)))
+                        .WithSemicolonToken(SyntaxFactory.Token(SyntaxKind.SemicolonToken))
+                );
+                continue;
+            }
+
             finalMembers = finalMembers.Add(member);
         }
 
@@ -210,13 +226,13 @@ public sealed class UsePrimaryConstructorCodeFix : CodeFixProvider
         return currentSolution.WithDocumentSyntaxRoot(document.Id, newRoot);
     }
 
-    private static List<KeyValuePair<IFieldSymbol, string>> BuildFieldToParameterMap(
+    private static List<KeyValuePair<ISymbol, string>> BuildMemberToParameterMap(
         ConstructorDeclarationSyntax constructorDecl,
         SemanticModel semanticModel,
         CancellationToken ct
     )
     {
-        var result = new List<KeyValuePair<IFieldSymbol, string>>();
+        var result = new List<KeyValuePair<ISymbol, string>>();
 
         if (constructorDecl.Body is null)
         {
@@ -252,7 +268,8 @@ public sealed class UsePrimaryConstructorCodeFix : CodeFixProvider
                 continue;
             }
 
-            if (semanticModel.GetSymbolInfo(leftTarget, ct).Symbol is not IFieldSymbol fieldSymbol)
+            var memberSymbol = semanticModel.GetSymbolInfo(leftTarget, ct).Symbol;
+            if (memberSymbol is not (IFieldSymbol or IPropertySymbol))
             {
                 continue;
             }
@@ -260,7 +277,7 @@ public sealed class UsePrimaryConstructorCodeFix : CodeFixProvider
             var rightSymbol = semanticModel.GetSymbolInfo(assignment.Right, ct).Symbol;
             if (rightSymbol is IParameterSymbol paramSymbol)
             {
-                result.Add(new KeyValuePair<IFieldSymbol, string>(fieldSymbol, paramSymbol.Name));
+                result.Add(new KeyValuePair<ISymbol, string>(memberSymbol, paramSymbol.Name));
             }
         }
 
@@ -270,18 +287,17 @@ public sealed class UsePrimaryConstructorCodeFix : CodeFixProvider
     private static List<ParameterSyntax> BuildPrimaryConstructorParameters(ConstructorDeclarationSyntax constructorDecl)
     {
         var readOnlyAttribute = SyntaxFactory.Attribute(SyntaxFactory.IdentifierName("ReadOnly"));
-        var attributeList = SyntaxFactory
+        var readOnlyAttrList = SyntaxFactory
             .AttributeList(SyntaxFactory.SingletonSeparatedList(readOnlyAttribute))
             .WithTrailingTrivia(SyntaxFactory.Space);
 
         return
         [
             .. constructorDecl.ParameterList.Parameters.Select(param =>
-                SyntaxFactory
-                    .Parameter(param.Identifier)
-                    .WithType(param.Type)
-                    .WithAttributeLists(SyntaxFactory.SingletonList(attributeList))
-            ),
+            {
+                var attrs = param.AttributeLists.Add(readOnlyAttrList);
+                return SyntaxFactory.Parameter(param.Identifier).WithType(param.Type).WithAttributeLists(attrs);
+            }),
         ];
     }
 

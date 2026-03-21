@@ -359,6 +359,118 @@ public class UsePrimaryConstructorCodeFixTests
     }
 
     [Test]
+    public async Task ConvertsPropertyAssignmentsToInitializedProperties()
+    {
+        var test = CreateTest(
+            """
+            public class OrderHandler
+            {
+                public int OrderId { get; }
+                public string Name { get; }
+
+                public {|DL1005:OrderHandler|}(int orderId, string name)
+                {
+                    OrderId = orderId;
+                    Name = name;
+                }
+
+                public string Display() => $"{OrderId}: {Name}";
+            }
+            """,
+            """
+            using DemoriLabs.CodeAnalysis.Attributes;
+
+            public class OrderHandler(
+                [ReadOnly] int orderId,
+                [ReadOnly] string name
+            )
+            {
+                public int OrderId { get; } = orderId;
+                public string Name { get; } = name;
+
+                public string Display() => $"{OrderId}: {Name}";
+            }
+            """
+        );
+
+        await test.RunAsync();
+    }
+
+    [Test]
+    public async Task ConvertsMixOfFieldsAndPropertiesToPrimaryConstructor()
+    {
+        var test = CreateTest(
+            """
+            public class OrderHandler
+            {
+                private readonly object _logger;
+                public int OrderId { get; }
+
+                public {|DL1005:OrderHandler|}(object logger, int orderId)
+                {
+                    _logger = logger;
+                    OrderId = orderId;
+                }
+
+                public object GetLogger() => _logger;
+                public int GetId() => OrderId;
+            }
+            """,
+            """
+            using DemoriLabs.CodeAnalysis.Attributes;
+
+            public class OrderHandler(
+                [ReadOnly] object logger,
+                [ReadOnly] int orderId
+            )
+            {
+                public int OrderId { get; } = orderId;
+
+                public object GetLogger() => logger;
+                public int GetId() => OrderId;
+            }
+            """
+        );
+
+        await test.RunAsync();
+    }
+
+    [Test]
+    public async Task PreservesExistingParameterAttributes()
+    {
+        var test = CreateTest(
+            """
+            using System.ComponentModel.DataAnnotations;
+
+            public class MyService
+            {
+                private readonly string _name;
+
+                public {|DL1005:MyService|}([Required] string name)
+                {
+                    _name = name;
+                }
+
+                public string GetName() => _name;
+            }
+            """,
+            """
+            using System.ComponentModel.DataAnnotations;
+            using DemoriLabs.CodeAnalysis.Attributes;
+
+            public class MyService(
+                [Required][ReadOnly] string name
+            )
+            {
+                public string GetName() => name;
+            }
+            """
+        );
+
+        await test.RunAsync();
+    }
+
+    [Test]
     public async Task MixedPrivateAndProtectedFields_PrivateRemovedProtectedKept()
     {
         var test = CreateTest(

@@ -190,6 +190,70 @@ public class UsePrimaryConstructorAnalyzerTests
     }
 
     [Test]
+    public async Task ConstructorAssigningToGetOnlyProperties_ReportsDiagnostic()
+    {
+        var test = CreateTest(
+            """
+            public class OrderHandler
+            {
+                public int OrderId { get; }
+                public string Name { get; }
+
+                public {|DL1005:OrderHandler|}(int orderId, string name)
+                {
+                    OrderId = orderId;
+                    Name = name;
+                }
+            }
+            """
+        );
+
+        await test.RunAsync();
+    }
+
+    [Test]
+    public async Task ConstructorAssigningToMixOfFieldsAndProperties_ReportsDiagnostic()
+    {
+        var test = CreateTest(
+            """
+            public class OrderHandler
+            {
+                private readonly object _logger;
+                public int OrderId { get; }
+
+                public {|DL1005:OrderHandler|}(object logger, int orderId)
+                {
+                    _logger = logger;
+                    OrderId = orderId;
+                }
+            }
+            """
+        );
+
+        await test.RunAsync();
+    }
+
+    [Test]
+    public async Task ConstructorAssignsToMutableProperty_NoDiagnostic()
+    {
+        var test = CreateTest(
+            """
+            public class OrderHandler
+            {
+                public int OrderId { get; set; }
+
+                public OrderHandler(int orderId)
+                {
+                    OrderId = orderId;
+                }
+            }
+            """
+        );
+
+        await test.RunAsync();
+    }
+
+    [Test]
     public async Task ConstructorAssignsNonReadonlyField_NoDiagnostic()
     {
         var test = CreateTest(

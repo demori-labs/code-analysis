@@ -135,14 +135,14 @@ public sealed class UsePrimaryConstructorAnalyzer : DiagnosticAnalyzer
                 return false;
             }
 
-            var leftSymbol = ResolveFieldSymbol(assignment.Left, semanticModel, context.CancellationToken);
+            var leftSymbol = ResolveMemberSymbol(assignment.Left, semanticModel, context.CancellationToken);
             if (leftSymbol is null)
                 return false;
 
             if (SymbolEqualityComparer.Default.Equals(leftSymbol.ContainingType, containingType) is false)
                 return false;
 
-            if (isClass && leftSymbol.IsReadOnly is false)
+            if (isClass && IsReadOnlyMember(leftSymbol) is false)
                 return false;
 
             var rightSymbol = semanticModel.GetSymbolInfo(assignment.Right, context.CancellationToken).Symbol;
@@ -158,7 +158,17 @@ public sealed class UsePrimaryConstructorAnalyzer : DiagnosticAnalyzer
         return accountedParameters.Count == parameterSymbols.Length;
     }
 
-    private static IFieldSymbol? ResolveFieldSymbol(
+    private static bool IsReadOnlyMember(ISymbol symbol)
+    {
+        return symbol switch
+        {
+            IFieldSymbol field => field.IsReadOnly,
+            IPropertySymbol property => property.SetMethod is null or { IsInitOnly: true },
+            _ => false,
+        };
+    }
+
+    private static ISymbol? ResolveMemberSymbol(
         ExpressionSyntax expression,
         SemanticModel semanticModel,
         CancellationToken cancellationToken
@@ -175,6 +185,6 @@ public sealed class UsePrimaryConstructorAnalyzer : DiagnosticAnalyzer
             return null;
 
         var symbol = semanticModel.GetSymbolInfo(target, cancellationToken).Symbol;
-        return symbol as IFieldSymbol;
+        return symbol is IFieldSymbol or IPropertySymbol ? symbol : null;
     }
 }
