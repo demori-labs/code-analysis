@@ -29,6 +29,28 @@ public sealed class RecordsShouldNotHaveMutablePropertiesAnalyzer : DiagnosticAn
         context.RegisterSymbolAction(AnalyzeNamedType, SymbolKind.NamedType);
     }
 
+    private static bool IsSetterRequiredByInterface(IPropertySymbol property, INamedTypeSymbol containingType)
+    {
+        foreach (var iface in containingType.AllInterfaces)
+        {
+            foreach (var member in iface.GetMembers(property.Name))
+            {
+                if (
+                    member is IPropertySymbol { SetMethod: { IsInitOnly: false } } ifaceProp
+                    && SymbolEqualityComparer.Default.Equals(
+                        containingType.FindImplementationForInterfaceMember(ifaceProp),
+                        property
+                    )
+                )
+                {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
     private static void AnalyzeNamedType(SymbolAnalysisContext context)
     {
         var typeSymbol = (INamedTypeSymbol)context.Symbol;
@@ -53,10 +75,10 @@ public sealed class RecordsShouldNotHaveMutablePropertiesAnalyzer : DiagnosticAn
             if (AnnotationAttributes.HasMutableAttribute(property))
                 continue;
 
-            if (property.SetMethod is not { } setMethod)
+            if (property.SetMethod is not { IsInitOnly: false })
                 continue;
 
-            if (setMethod.IsInitOnly)
+            if (IsSetterRequiredByInterface(property, typeSymbol))
                 continue;
 
             context.ReportDiagnostic(Diagnostic.Create(Rule, property.Locations[0], property.Name, typeSymbol.Name));

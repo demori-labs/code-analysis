@@ -188,6 +188,70 @@ public class RecordsShouldNotHaveMutablePropertiesAnalyzerTests
     }
 
     [Test]
+    public async Task RecordImplementingInterfaceWithSetter_NoDiagnostic()
+    {
+        var test = CreateTest(
+            """
+            public interface IEntity
+            {
+                int Id { get; set; }
+                string Name { get; set; }
+            }
+
+            public record Person : IEntity
+            {
+                public required int Id { get; set; }
+                public required string Name { get; set; }
+            }
+            """
+        );
+
+        await test.RunAsync();
+    }
+
+    [Test]
+    public async Task RecordImplementingInterfaceWithGetOnly_ReportsDiagnostic()
+    {
+        var test = CreateTest(
+            """
+            public interface IEntity
+            {
+                int Id { get; }
+            }
+
+            public record Person : IEntity
+            {
+                public int Id { get; }
+                public string {|DL1001:Name|} { get; set; }
+            }
+            """
+        );
+
+        await test.RunAsync();
+    }
+
+    [Test]
+    public async Task RecordWithMixOfInterfaceAndFreeProperties_ReportsOnlyFreeOnes()
+    {
+        var test = CreateTest(
+            """
+            public interface IMutable
+            {
+                string Value { get; set; }
+            }
+
+            public record Config : IMutable
+            {
+                public required string Value { get; set; }
+                public string {|DL1001:Extra|} { get; set; }
+            }
+            """
+        );
+
+        await test.RunAsync();
+    }
+
+    [Test]
     public async Task EmptyRecord_NoDiagnostic()
     {
         var test = CreateTest(
