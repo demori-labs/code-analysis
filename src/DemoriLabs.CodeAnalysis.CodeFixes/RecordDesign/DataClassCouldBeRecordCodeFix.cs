@@ -307,25 +307,38 @@ public sealed class DataClassCouldBeRecordCodeFix : CodeFixProvider
         CancellationToken ct
     )
     {
-        if (constructor.Body is null)
-            return;
+        var assignments = new List<AssignmentExpressionSyntax>();
 
-        foreach (var statement in constructor.Body.Statements)
+        if (constructor.Body is not null)
         {
-            if (
-                statement
-                is not ExpressionStatementSyntax
-                {
-                    Expression: AssignmentExpressionSyntax
-                    {
-                        RawKind: (int)SyntaxKind.SimpleAssignmentExpression
-                    } assignment
-                }
-            )
+            foreach (var statement in constructor.Body.Statements)
             {
-                continue;
+                if (
+                    statement is ExpressionStatementSyntax
+                    {
+                        Expression: AssignmentExpressionSyntax
+                        {
+                            RawKind: (int)SyntaxKind.SimpleAssignmentExpression
+                        } assignment
+                    }
+                )
+                {
+                    assignments.Add(assignment);
+                }
             }
+        }
+        else if (
+            constructor.ExpressionBody?.Expression is AssignmentExpressionSyntax
+            {
+                RawKind: (int)SyntaxKind.SimpleAssignmentExpression
+            } exprAssignment
+        )
+        {
+            assignments.Add(exprAssignment);
+        }
 
+        foreach (var assignment in assignments)
+        {
             var leftTarget = assignment.Left switch
             {
                 MemberAccessExpressionSyntax { Expression: ThisExpressionSyntax } memberAccess => memberAccess
@@ -344,7 +357,6 @@ public sealed class DataClassCouldBeRecordCodeFix : CodeFixProvider
             if (rightSymbol is not IParameterSymbol paramSymbol)
                 continue;
 
-            // Find default value for the parameter
             var paramSyntax = constructor.ParameterList.Parameters.FirstOrDefault(p =>
                 p.Identifier.Text == paramSymbol.Name
             );

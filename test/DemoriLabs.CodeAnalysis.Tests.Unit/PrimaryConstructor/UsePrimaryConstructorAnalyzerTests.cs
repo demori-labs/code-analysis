@@ -277,6 +277,45 @@ public class UsePrimaryConstructorAnalyzerTests
     }
 
     [Test]
+    public async Task TupleDeconstructionAssignment_NoDiagnostic()
+    {
+        var test = CreateTest(
+            """
+            public class Pair
+            {
+                public int X { get; }
+                public int Y { get; }
+
+                public Pair(int x, int y)
+                {
+                    (X, Y) = (x, y);
+                }
+            }
+            """
+        );
+
+        await test.RunAsync();
+    }
+
+    [Test]
+    public async Task ExpressionBodiedConstructor_ReportsDiagnostic()
+    {
+        var test = CreateTest(
+            """
+            public class Event
+            {
+                public int OrderId { get; }
+
+                public {|DL1005:Event|}(int orderId)
+                    => OrderId = orderId;
+            }
+            """
+        );
+
+        await test.RunAsync();
+    }
+
+    [Test]
     public async Task AbstractClass_ReportsDiagnostic()
     {
         var test = CreateTest(

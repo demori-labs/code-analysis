@@ -359,6 +359,38 @@ public class UsePrimaryConstructorCodeFixTests
     }
 
     [Test]
+    public async Task ExpressionBodiedConstructor_ConvertsToProperty()
+    {
+        var test = CreateTest(
+            """
+            public class Event
+            {
+                public int OrderId { get; }
+
+                public {|DL1005:Event|}(int orderId)
+                    => OrderId = orderId;
+
+                public int GetId() => OrderId;
+            }
+            """,
+            """
+            using DemoriLabs.CodeAnalysis.Attributes;
+
+            public class Event(
+                [ReadOnly] int orderId
+            )
+            {
+                public int OrderId { get; } = orderId;
+
+                public int GetId() => OrderId;
+            }
+            """
+        );
+
+        await test.RunAsync();
+    }
+
+    [Test]
     public async Task ConvertsPropertyAssignmentsToInitializedProperties()
     {
         var test = CreateTest(

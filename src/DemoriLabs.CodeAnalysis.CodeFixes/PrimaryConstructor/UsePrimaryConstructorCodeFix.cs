@@ -233,28 +233,38 @@ public sealed class UsePrimaryConstructorCodeFix : CodeFixProvider
     )
     {
         var result = new List<KeyValuePair<ISymbol, string>>();
+        var assignments = new List<AssignmentExpressionSyntax>();
 
-        if (constructorDecl.Body is null)
+        if (constructorDecl.Body is not null)
         {
-            return result;
+            foreach (var statement in constructorDecl.Body.Statements)
+            {
+                if (
+                    statement is ExpressionStatementSyntax
+                    {
+                        Expression: AssignmentExpressionSyntax
+                        {
+                            RawKind: (int)SyntaxKind.SimpleAssignmentExpression
+                        } assignment
+                    }
+                )
+                {
+                    assignments.Add(assignment);
+                }
+            }
+        }
+        else if (
+            constructorDecl.ExpressionBody?.Expression is AssignmentExpressionSyntax
+            {
+                RawKind: (int)SyntaxKind.SimpleAssignmentExpression
+            } exprAssignment
+        )
+        {
+            assignments.Add(exprAssignment);
         }
 
-        foreach (var statement in constructorDecl.Body.Statements)
+        foreach (var assignment in assignments)
         {
-            if (
-                statement
-                is not ExpressionStatementSyntax
-                {
-                    Expression: AssignmentExpressionSyntax
-                    {
-                        RawKind: (int)SyntaxKind.SimpleAssignmentExpression
-                    } assignment
-                }
-            )
-            {
-                continue;
-            }
-
             var leftTarget = assignment.Left switch
             {
                 MemberAccessExpressionSyntax { Expression: ThisExpressionSyntax } memberAccess => memberAccess

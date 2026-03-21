@@ -35,10 +35,13 @@ public sealed class UsePrimaryConstructorAnalyzer : DiagnosticAnalyzer
     {
         var constructorSyntax = (ConstructorDeclarationSyntax)context.Node;
 
-        if (constructorSyntax.Body is not { } body)
+        var hasBody = constructorSyntax.Body is not null;
+        var hasExpressionBody = constructorSyntax.ExpressionBody is not null;
+
+        if (hasBody is false && hasExpressionBody is false)
             return;
 
-        if (body.Statements.Count == 0 && constructorSyntax.Initializer is null)
+        if (hasBody && constructorSyntax.Body!.Statements.Count == 0 && constructorSyntax.Initializer is null)
             return;
 
         if (constructorSyntax.Parent is not TypeDeclarationSyntax typeDecl)
@@ -84,14 +87,13 @@ public sealed class UsePrimaryConstructorAnalyzer : DiagnosticAnalyzer
         if (constructorSymbol is null || constructorSymbol.Parameters.Length is 0)
             return;
 
-        if (IsValidFieldAssignmentConstructor(body, constructorSyntax, constructorSymbol, typeSymbol, context) is false)
+        if (IsValidMemberAssignmentConstructor(constructorSyntax, constructorSymbol, typeSymbol, context) is false)
             return;
 
         context.ReportDiagnostic(Diagnostic.Create(Rule, constructorSyntax.Identifier.GetLocation(), typeSymbol.Name));
     }
 
-    private static bool IsValidFieldAssignmentConstructor(
-        BlockSyntax body,
+    private static bool IsValidMemberAssignmentConstructor(
         ConstructorDeclarationSyntax constructorSyntax,
         IMethodSymbol constructor,
         INamedTypeSymbol containingType,
@@ -100,7 +102,6 @@ public sealed class UsePrimaryConstructorAnalyzer : DiagnosticAnalyzer
     {
         var parameterSymbols = constructor.Parameters;
         var accountedParameters = new HashSet<IParameterSymbol>(SymbolEqualityComparer.Default);
-        var isClass = containingType.TypeKind is TypeKind.Class;
         var semanticModel = context.SemanticModel;
 
         // Account for parameters passed through in base/this initializer
@@ -119,31 +120,48 @@ public sealed class UsePrimaryConstructorAnalyzer : DiagnosticAnalyzer
             }
         }
 
-        foreach (var statement in body.Statements)
-        {
-            if (
-                statement
-                is not ExpressionStatementSyntax
-                {
-                    Expression: AssignmentExpressionSyntax
-                    {
-                        RawKind: (int)SyntaxKind.SimpleAssignmentExpression
-                    } assignment
-                }
-            )
-            {
-                return false;
-            }
+        // Collect assignments from block body or expression body
+        var assignments = new List<AssignmentExpressionSyntax>();
 
+        if (constructorSyntax.Body is { } body)
+        {
+            foreach (var statement in body.Statements)
+            {
+                if (
+                    statement
+                    is not ExpressionStatementSyntax
+                    {
+                        Expression: AssignmentExpressionSyntax
+                        {
+                            RawKind: (int)SyntaxKind.SimpleAssignmentExpression
+                        } assignment
+                    }
+                )
+                {
+                    return false;
+                }
+
+                assignments.Add(assignment);
+            }
+        }
+        else if (
+            constructorSyntax.ExpressionBody?.Expression is AssignmentExpressionSyntax
+            {
+                RawKind: (int)SyntaxKind.SimpleAssignmentExpression
+            } exprAssignment
+        )
+        {
+            assignments.Add(exprAssignment);
+        }
+
+        foreach (var assignment in assignments)
+        {
             var leftSymbol = ResolveMemberSymbol(assignment.Left, semanticModel, context.CancellationToken);
             if (leftSymbol is null)
                 return false;
 
             if (SymbolEqualityComparer.Default.Equals(leftSymbol.ContainingType, containingType) is false)
                 return false;
-
-            // Structs allow any member. For classes, non-readonly private fields
-            // are kept with an initialiser (not removed), so they're also allowed.
 
             var rightSymbol = semanticModel.GetSymbolInfo(assignment.Right, context.CancellationToken).Symbol;
             if (rightSymbol is not IParameterSymbol paramSymbol)

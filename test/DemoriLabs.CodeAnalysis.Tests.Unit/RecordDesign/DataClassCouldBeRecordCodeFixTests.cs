@@ -313,6 +313,30 @@ public class DataClassCouldBeRecordCodeFixTests
     }
 
     [Test]
+    public async Task ExpressionBodiedConstructor_RemovesAndConvertsProperty()
+    {
+        var test = CreateTest(
+            """
+            public class {|DL1004:Event|}
+            {
+                public int OrderId { get; }
+
+                public Event(int orderId)
+                    => OrderId = orderId;
+            }
+            """,
+            """
+            public sealed record Event
+            {
+                public required int OrderId { get; init; }
+            }
+            """
+        );
+
+        await test.RunAsync();
+    }
+
+    [Test]
     public async Task PreservesStaticMethods()
     {
         var test = CreateTest(
