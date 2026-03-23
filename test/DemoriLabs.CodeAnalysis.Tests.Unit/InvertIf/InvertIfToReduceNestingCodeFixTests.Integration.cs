@@ -1,5 +1,6 @@
 namespace DemoriLabs.CodeAnalysis.Tests.Unit.InvertIf;
 
+// ReSharper disable MemberCanBeMadeStatic.Global
 public partial class InvertIfToReduceNestingCodeFixTests
 {
     [Test]
@@ -1398,6 +1399,83 @@ public partial class InvertIfToReduceNestingCodeFixTests
                 public int MemberCount { get; set; }
                 public int SprintLengthDays { get; set; }
                 public double GetAverageVelocity() => 0;
+            }
+            """
+        );
+
+        await test.RunAsync();
+    }
+
+    [Test]
+    public async Task Integration_LambdaComparisonsPreservedForExpressionTreeCompatibility()
+    {
+        var test = CreateTest(
+            """
+            using System;
+            using System.Linq;
+            using System.Threading.Tasks;
+
+            public class C
+            {
+                private readonly DbContext dbContext = null!;
+
+                public Task<IQueryable<Notification>> Handle(bool includeExpired)
+                {
+                    IQueryable<Notification> notifications = dbContext.Notifications;
+
+                    {|DL3002:if|} (!includeExpired)
+                    {
+                        notifications = notifications.Where(n =>
+                            n.ExpirationDate > DateTime.UtcNow || n.ExpirationDate == null
+                        );
+                    }
+
+                    return Task.FromResult(notifications);
+                }
+            }
+
+            public class DbContext
+            {
+                public IQueryable<Notification> Notifications { get; set; } = null!;
+            }
+
+            public class Notification
+            {
+                public DateTime? ExpirationDate { get; set; }
+            }
+            """,
+            """
+            using System;
+            using System.Linq;
+            using System.Threading.Tasks;
+
+            public class C
+            {
+                private readonly DbContext dbContext = null!;
+
+                public Task<IQueryable<Notification>> Handle(bool includeExpired)
+                {
+                    IQueryable<Notification> notifications = dbContext.Notifications;
+
+                    if (includeExpired)
+                        return Task.FromResult(notifications);
+
+                    notifications = notifications.Where(n =>
+                        n.ExpirationDate > DateTime.UtcNow || n.ExpirationDate == null
+                    );
+
+                    return Task.FromResult(notifications);
+                }
+            }
+
+            public class DbContext
+            {
+                public IQueryable<Notification> Notifications { get; set; } = null!;
+            }
+
+            public class Notification
+            {
+                public DateTime? ExpirationDate { get; set; }
             }
             """
         );

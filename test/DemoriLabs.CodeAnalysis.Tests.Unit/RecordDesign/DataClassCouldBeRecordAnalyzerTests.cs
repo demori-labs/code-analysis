@@ -96,6 +96,76 @@ public class DataClassCouldBeRecordAnalyzerTests
     }
 
     [Test]
+    public async Task ClassWithStaticMethod_ReportsDiagnostic()
+    {
+        var test = CreateTest(
+            """
+            public class {|DL1004:Person|}
+            {
+                public string Name { get; set; }
+
+                public static Person Create(string name) => new Person { Name = name };
+            }
+            """
+        );
+
+        await test.RunAsync();
+    }
+
+    [Test]
+    public async Task ClassWithStaticFactoryAndConstructor_ReportsDiagnostic()
+    {
+        var test = CreateTest(
+            """
+            public class {|DL1004:Person|}
+            {
+                public string Name { get; set; }
+
+                public Person(string name) { Name = name; }
+
+                public static Person Default() => new Person("Unknown");
+            }
+            """
+        );
+
+        await test.RunAsync();
+    }
+
+    [Test]
+    public async Task ClassWithDestructor_NoDiagnostic()
+    {
+        var test = CreateTest(
+            """
+            public class Resource
+            {
+                public string Name { get; set; }
+
+                ~Resource() { }
+            }
+            """
+        );
+
+        await test.RunAsync();
+    }
+
+    [Test]
+    public async Task ClassWithConversionOperator_NoDiagnostic()
+    {
+        var test = CreateTest(
+            """
+            public class Temperature
+            {
+                public double Value { get; set; }
+
+                public static implicit operator double(Temperature t) => t.Value;
+            }
+            """
+        );
+
+        await test.RunAsync();
+    }
+
+    [Test]
     public async Task ClassWithField_NoDiagnostic()
     {
         var test = CreateTest(
@@ -241,6 +311,80 @@ public class DataClassCouldBeRecordAnalyzerTests
             {
                 public int Id { get; set; }
                 public string Name { get; set; }
+            }
+            """
+        );
+
+        await test.RunAsync();
+    }
+
+    [Test]
+    public async Task ClassImplementingInterfaceWithMutableProperty_NoDiagnostic()
+    {
+        var test = CreateTest(
+            """
+            public interface IEntity
+            {
+                int Id { get; set; }
+            }
+
+            public class Person : IEntity
+            {
+                public int Id { get; set; }
+                public string Name { get; set; }
+            }
+            """
+        );
+
+        await test.RunAsync();
+    }
+
+    [Test]
+    public async Task ClassImplementingInterfaceWithMethod_NoDiagnostic()
+    {
+        var test = CreateTest(
+            """
+            public interface IHandler
+            {
+                int Id { get; }
+                void Execute();
+            }
+
+            public class MyHandler : IHandler
+            {
+                public int Id { get; set; }
+                public void Execute() { }
+            }
+            """
+        );
+
+        await test.RunAsync();
+    }
+
+    [Test]
+    public async Task ClassWithRecordSynthesisableMethods_ReportsDiagnostic()
+    {
+        var test = CreateTest(
+            """
+            using System;
+
+            public class {|DL1004:Person|} : IEquatable<Person>
+            {
+                public string Name { get; set; }
+                public int Age { get; set; }
+
+                public override bool Equals(object? obj) => Equals(obj as Person);
+                public bool Equals(Person? other) => other is not null && Name == other.Name;
+                public override int GetHashCode() => HashCode.Combine(Name, Age);
+                public static bool operator ==(Person? left, Person? right) => Equals(left, right);
+                public static bool operator !=(Person? left, Person? right) => !Equals(left, right);
+                public override string ToString() => $"Person {{ Name = {Name} }}";
+
+                public void Deconstruct(out string name, out int age)
+                {
+                    name = Name;
+                    age = Age;
+                }
             }
             """
         );

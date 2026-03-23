@@ -1,5 +1,6 @@
 namespace DemoriLabs.CodeAnalysis.Tests.Unit.InvertIf;
 
+// ReSharper disable MemberCanBeMadeStatic.Global
 public partial class InvertIfToReduceNestingAnalyzerTests
 {
     [Test]
@@ -112,7 +113,7 @@ public partial class InvertIfToReduceNestingAnalyzerTests
             {
                 public int M(bool condition)
                 {
-                    {|DL3002:if|} (condition)
+                    if (condition)
                     {
                         return 42;
                     }

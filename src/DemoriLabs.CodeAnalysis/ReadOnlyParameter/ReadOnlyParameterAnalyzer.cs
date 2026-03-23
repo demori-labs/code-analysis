@@ -158,16 +158,19 @@ public sealed class ReadOnlyParameterAnalyzer : DiagnosticAnalyzer
 
     private static IParameterSymbol? ResolveParameter(ISymbol? symbol)
     {
-        if (symbol is IParameterSymbol p)
-            return p;
-
-        if (symbol is IFieldSymbol { IsImplicitlyDeclared: true } field)
-            return FindPrimaryConstructorParameter(field.ContainingType, field.Name);
-
-        if (symbol is IPropertySymbol property && IsPositionalRecordProperty(property))
-            return FindPrimaryConstructorParameter(property.ContainingType, property.Name);
-
-        return null;
+        return symbol switch
+        {
+            IParameterSymbol p => p,
+            IFieldSymbol { IsImplicitlyDeclared: true } field => FindPrimaryConstructorParameter(
+                field.ContainingType,
+                field.Name
+            ),
+            IPropertySymbol property when IsPositionalRecordProperty(property) => FindPrimaryConstructorParameter(
+                property.ContainingType,
+                property.Name
+            ),
+            _ => null,
+        };
     }
 
     private static bool IsPositionalRecordProperty(IPropertySymbol property)

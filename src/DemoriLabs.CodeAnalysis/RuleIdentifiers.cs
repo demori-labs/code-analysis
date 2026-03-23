@@ -7,11 +7,13 @@ internal static class RuleIdentifiers
     public const string RecordsShouldNotHaveMutablePropertyTypes = "DL1002";
     public const string RecordPrimaryConstructorTooManyParameters = "DL1003";
     public const string DataClassCouldBeRecord = "DL1004";
+    public const string UsePrimaryConstructor = "DL1005";
 
     // DL2xxx — Usage
     public const string ReadOnlyParameter = "DL2001";
     public const string ReadOnlyIncompatibleModifier = "DL2002";
     public const string SuggestReadOnlyPrimaryConstructorParameter = "DL2003";
+    public const string MutableIncompatibleModifier = "DL2004";
 
     // DL3xxx — Style
     public const string NamedArgument = "DL3001";

@@ -10,7 +10,7 @@ namespace DemoriLabs.CodeAnalysis.RecordDesign;
 [DiagnosticAnalyzer(LanguageNames.CSharp)]
 public sealed class DataClassCouldBeRecordAnalyzer : DiagnosticAnalyzer
 {
-    internal static readonly DiagnosticDescriptor Rule = new(
+    private static readonly DiagnosticDescriptor Rule = new(
         RuleIdentifiers.DataClassCouldBeRecord,
         title: "Data class could be a record",
         messageFormat: "Class '{0}' only defines data members and could be converted to a record with immutable properties",
@@ -60,6 +60,11 @@ public sealed class DataClassCouldBeRecordAnalyzer : DiagnosticAnalyzer
             return;
         }
 
+        if (HasIncompatibleInterface(typeSymbol))
+        {
+            return;
+        }
+
         var hasProperties = false;
 
         foreach (var member in typeSymbol.GetMembers())
@@ -89,13 +94,57 @@ public sealed class DataClassCouldBeRecordAnalyzer : DiagnosticAnalyzer
         context.ReportDiagnostic(Diagnostic.Create(Rule, typeSymbol.Locations[0], typeSymbol.Name));
     }
 
+    private static bool HasIncompatibleInterface(INamedTypeSymbol typeSymbol)
+    {
+        foreach (var iface in typeSymbol.AllInterfaces)
+        {
+            // IEquatable<T> is auto-implemented by records
+            if (
+                iface is { IsGenericType: true, OriginalDefinition.Name: "IEquatable" }
+                && iface.OriginalDefinition.ContainingNamespace?.ToDisplayString() is "System"
+            )
+            {
+                continue;
+            }
+
+            foreach (var member in iface.GetMembers())
+            {
+                if (member is IMethodSymbol { MethodKind: MethodKind.Ordinary })
+                    return true;
+
+                if (member is IPropertySymbol { SetMethod: { IsInitOnly: false } })
+                    return true;
+            }
+        }
+
+        return false;
+    }
+
     private static bool IsBehaviourMethod(IMethodSymbol method)
     {
-        return method.MethodKind
-            is MethodKind.Ordinary
-                or MethodKind.Conversion
-                or MethodKind.Destructor
-                or MethodKind.UserDefinedOperator;
+        if (method.MethodKind is MethodKind.Conversion or MethodKind.Destructor)
+            return true;
+
+        if (method.MethodKind is MethodKind.UserDefinedOperator)
+            return IsRecordSynthesisableOperator(method) is false;
+
+        if (method.MethodKind is not MethodKind.Ordinary)
+            return false;
+
+        if (method.IsStatic)
+            return false;
+
+        return IsRecordSynthesisableMethod(method) is false;
+    }
+
+    private static bool IsRecordSynthesisableMethod(IMethodSymbol method)
+    {
+        return method.Name is "Equals" or "GetHashCode" or "ToString" or "Deconstruct" or "PrintMembers";
+    }
+
+    private static bool IsRecordSynthesisableOperator(IMethodSymbol method)
+    {
+        return method.Name is "op_Equality" or "op_Inequality";
     }
 
     private static bool IsPartialClass(INamedTypeSymbol typeSymbol)

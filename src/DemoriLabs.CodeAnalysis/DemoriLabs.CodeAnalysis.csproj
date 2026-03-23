@@ -8,6 +8,16 @@
         <NoWarn>$(NoWarn);NU5128</NoWarn>
     </PropertyGroup>
 
+    <PropertyGroup>
+        <PackageId>DemoriLabs.CodeAnalysis</PackageId>
+        <PackageTags>Roslyn; Analyzer; CodeFix; CSharp; CodeAnalysis; Diagnostics; Linting;</PackageTags>
+        <PackageProjectUrl>https://github.com/demori-labs/code-analysis</PackageProjectUrl>
+        <PackageReleaseNotes>https://github.com/demori-labs/code-analysis</PackageReleaseNotes>
+        <RepositoryUrl>https://github.com/demori-labs/code-analysis</RepositoryUrl>
+        <RoslynAnalyzer>true</RoslynAnalyzer>
+        <SkipAnalyzers>true</SkipAnalyzers>
+    </PropertyGroup>
+
     <ItemGroup>
         <InternalsVisibleTo Include="DemoriLabs.CodeAnalysis.Tests.Unit" />
     </ItemGroup>
@@ -18,9 +28,15 @@
             <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
         </PackageReference>
         <PackageReference Include="Microsoft.CodeAnalysis.CSharp" PrivateAssets="all" />
+        <PackageReference Include="Nerdbank.GitVersioning">
+            <PrivateAssets>all</PrivateAssets>
+            <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+        </PackageReference>
     </ItemGroup>
 
     <ItemGroup>
+        <None Include="$(RootDir)docs\static\icon.png" Pack="true" PackagePath="" Visible="false" />
+        <None Include="$(RootDir)README.md" Pack="true" PackagePath="" Visible="false" />
         <None
             Include="$(OutputPath)\$(AssemblyName).dll"
             Pack="true"
@@ -28,15 +44,27 @@
             Visible="false"
         />
         <None
-            Include="$(MSBuildProjectDirectory)\..\DemoriLabs.CodeAnalysis.Attributes\bin\$(Configuration)\$(TargetFramework)\DemoriLabs.CodeAnalysis.Attributes.dll"
+            Include="$(ArtifactsPath)\bin\DemoriLabs.CodeAnalysis.Attributes\$(Configuration.ToLowerInvariant())\DemoriLabs.CodeAnalysis.Attributes.dll"
             Pack="true"
             PackagePath="lib/netstandard2.0"
             Visible="false"
         />
         <None
-            Include="$(MSBuildProjectDirectory)\..\DemoriLabs.CodeAnalysis.CodeFixes\bin\$(Configuration)\$(TargetFramework)\DemoriLabs.CodeAnalysis.CodeFixes.dll"
+            Include="$(ArtifactsPath)\bin\DemoriLabs.CodeAnalysis.Attributes\$(Configuration.ToLowerInvariant())\DemoriLabs.CodeAnalysis.Attributes.xml"
+            Pack="true"
+            PackagePath="lib/netstandard2.0"
+            Visible="false"
+        />
+        <None
+            Include="$(ArtifactsPath)\bin\DemoriLabs.CodeAnalysis.CodeFixes\$(Configuration.ToLowerInvariant())\DemoriLabs.CodeAnalysis.CodeFixes.dll"
             Pack="true"
             PackagePath="analyzers/dotnet/cs"
+            Visible="false"
+        />
+        <None
+            Include="buildTransitive\DemoriLabs.CodeAnalysis.props"
+            Pack="true"
+            PackagePath="buildTransitive"
             Visible="false"
         />
     </ItemGroup>

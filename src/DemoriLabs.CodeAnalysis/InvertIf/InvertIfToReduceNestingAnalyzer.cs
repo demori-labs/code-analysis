@@ -15,7 +15,7 @@ public sealed class InvertIfToReduceNestingAnalyzer : DiagnosticAnalyzer
         title: "Invert 'if' statement to reduce nesting",
         messageFormat: "Invert 'if' statement to reduce nesting",
         RuleCategories.Style,
-        DiagnosticSeverity.Info,
+        DiagnosticSeverity.Warning,
         isEnabledByDefault: true,
         description: "An 'if' statement that wraps the remaining body of a method can be inverted to an early return, reducing nesting depth."
     );
@@ -81,6 +81,18 @@ public sealed class InvertIfToReduceNestingAnalyzer : DiagnosticAnalyzer
             }
         }
         else if (isSecondToLast is false || IsExitStatement(parentStatements[ifIndex + 1]) is false)
+        {
+            return;
+        }
+
+        // Don't flag when the if body is a single exit statement followed by another exit —
+        // inverting would just swap the two branches with no nesting reduction.
+        if (
+            ifStatement.Else is null
+            && isSecondToLast
+            && ifStatement.Statement is BlockSyntax { Statements.Count: 1 } singleBlock
+            && IsExitStatement(singleBlock.Statements[0])
+        )
         {
             return;
         }
@@ -174,24 +186,22 @@ public sealed class InvertIfToReduceNestingAnalyzer : DiagnosticAnalyzer
         CancellationToken ct
     )
     {
-        // Fast syntactic check: void and other predefined types
-        if (localFunc.ReturnType is PredefinedTypeSyntax predefined)
+        switch (localFunc.ReturnType)
         {
-            return predefined.Keyword.IsKind(SyntaxKind.VoidKeyword) ? ExitContext.VoidReturn : ExitContext.ValueReturn;
-        }
+            // Fast syntactic check: void and other predefined types
+            case PredefinedTypeSyntax predefined:
+                return predefined.Keyword.IsKind(SyntaxKind.VoidKeyword)
+                    ? ExitContext.VoidReturn
+                    : ExitContext.ValueReturn;
 
-        // Fast syntactic check: types that can never be non-generic Task/ValueTask
-        if (
-            localFunc.ReturnType
-            is GenericNameSyntax
-                or ArrayTypeSyntax
-                or TupleTypeSyntax
-                or NullableTypeSyntax
-                or PointerTypeSyntax
-                or RefTypeSyntax
-        )
-        {
-            return ExitContext.ValueReturn;
+            // Fast syntactic check: types that can never be non-generic Task/ValueTask
+            case GenericNameSyntax
+            or ArrayTypeSyntax
+            or TupleTypeSyntax
+            or NullableTypeSyntax
+            or PointerTypeSyntax
+            or RefTypeSyntax:
+                return ExitContext.ValueReturn;
         }
 
         // Slow path: could be Task, ValueTask, or other — need semantic model

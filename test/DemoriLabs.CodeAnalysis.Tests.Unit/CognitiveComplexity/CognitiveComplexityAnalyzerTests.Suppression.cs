@@ -2,6 +2,7 @@ using DemoriLabs.CodeAnalysis.Attributes;
 
 namespace DemoriLabs.CodeAnalysis.Tests.Unit.CognitiveComplexity;
 
+// ReSharper disable MemberCanBeMadeStatic.Global
 public partial class CognitiveComplexityAnalyzerTests
 {
     [Test]

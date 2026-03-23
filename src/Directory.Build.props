@@ -1,6 +1,7 @@
 <Project>
     <Import Project="$([MSBuild]::GetPathOfFileAbove('Directory.Build.props', '$(MSBuildThisFileDirectory)../'))" />
     <Import Project="$(EngineeringDir)MSBuild\Analyzers.props" />
+    <Import Project="$(EngineeringDir)MSBuild\Packaging.props" />
     <PropertyGroup Condition="'$(GenerateDocumentationFile)' == ''">
         <GenerateDocumentationFile>true</GenerateDocumentationFile>
         <DebugType>embedded</DebugType>

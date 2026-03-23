@@ -11,18 +11,21 @@ internal static class CompilationFactory
     {
         var references = ((string)AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES")!)
             .Split(Path.PathSeparator)
-            .Select(path => (MetadataReference)MetadataReference.CreateFromFile(path))
+            .Select(MetadataReference (path) => MetadataReference.CreateFromFile(path))
             .ToImmutableArray();
 
         return references;
     });
 
-    public static CSharpCompilation CreateCompilation(string source, params MetadataReference[] additionalReferences)
+    public static CSharpCompilation CreateCompilation(
+        string source,
+        params IReadOnlyCollection<MetadataReference> additionalReferences
+    )
     {
         var syntaxTree = CSharpSyntaxTree.ParseText(source);
         var references = PlatformReferences.Value;
 
-        if (additionalReferences.Length > 0)
+        if (additionalReferences.Count > 0)
             references = references.AddRange(additionalReferences);
 
         return CSharpCompilation.Create(

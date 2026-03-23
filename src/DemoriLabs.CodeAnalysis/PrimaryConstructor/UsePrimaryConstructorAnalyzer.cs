@@ -1,0 +1,225 @@
+using System.Collections.Immutable;
+using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp;
+using Microsoft.CodeAnalysis.CSharp.Syntax;
+using Microsoft.CodeAnalysis.Diagnostics;
+
+namespace DemoriLabs.CodeAnalysis.PrimaryConstructor;
+
+/// <inheritdoc />
+[DiagnosticAnalyzer(LanguageNames.CSharp)]
+public sealed class UsePrimaryConstructorAnalyzer : DiagnosticAnalyzer
+{
+    private static readonly DiagnosticDescriptor Rule = new(
+        RuleIdentifiers.UsePrimaryConstructor,
+        title: "Type can use a primary constructor",
+        messageFormat: "Constructor of '{0}' can be converted to a primary constructor",
+        RuleCategories.Design,
+        DiagnosticSeverity.Warning,
+        isEnabledByDefault: true,
+        description: "Types with a single constructor that only assigns parameters to readonly fields can use a primary constructor for more concise syntax."
+    );
+
+    /// <inheritdoc />
+    public override ImmutableArray<DiagnosticDescriptor> SupportedDiagnostics => [Rule];
+
+    /// <inheritdoc />
+    public override void Initialize(AnalysisContext context)
+    {
+        context.EnableConcurrentExecution();
+        context.ConfigureGeneratedCodeAnalysis(GeneratedCodeAnalysisFlags.None);
+        context.RegisterSyntaxNodeAction(static ctx => AnalyzeConstructor(ctx), SyntaxKind.ConstructorDeclaration);
+    }
+
+    private static void AnalyzeConstructor(SyntaxNodeAnalysisContext context)
+    {
+        var constructorSyntax = (ConstructorDeclarationSyntax)context.Node;
+
+        var hasBody = constructorSyntax.Body is not null;
+        var hasExpressionBody = constructorSyntax.ExpressionBody is not null;
+
+        if (hasBody is false && hasExpressionBody is false)
+            return;
+
+        if (hasBody && constructorSyntax.Body!.Statements.Count == 0 && constructorSyntax.Initializer is null)
+            return;
+
+        if (constructorSyntax.Parent is not TypeDeclarationSyntax typeDecl)
+            return;
+
+        if (typeDecl is not (ClassDeclarationSyntax or StructDeclarationSyntax))
+            return;
+
+        if (typeDecl.ParameterList is not null)
+            return;
+
+        if (typeDecl.Modifiers.Any(static m => m.Kind() is SyntaxKind.PartialKeyword or SyntaxKind.StaticKeyword))
+        {
+            return;
+        }
+
+        var typeSymbol = context.SemanticModel.GetDeclaredSymbol(typeDecl, context.CancellationToken);
+        if (typeSymbol is null)
+            return;
+
+        if (typeSymbol.IsRecord)
+            return;
+
+        if (AnnotationAttributes.HasMutableAttribute(typeSymbol))
+            return;
+
+        var constructorSymbol = context.SemanticModel.GetDeclaredSymbol(constructorSyntax, context.CancellationToken);
+        if (constructorSymbol is null || constructorSymbol.Parameters.Length is 0)
+            return;
+
+        // Primary constructors are always public — skip non-public constructors
+        // to avoid widening accessibility
+        if (constructorSymbol.DeclaredAccessibility is not Accessibility.Public)
+            return;
+
+        if (IsValidMemberAssignmentConstructor(constructorSyntax, constructorSymbol, typeSymbol, context) is false)
+            return;
+
+        // All other constructors must chain to this one via : this(...)
+        if (AllOtherConstructorsChainTo(constructorSymbol, typeSymbol, context) is false)
+            return;
+
+        context.ReportDiagnostic(Diagnostic.Create(Rule, constructorSyntax.Identifier.GetLocation(), typeSymbol.Name));
+    }
+
+    private static bool AllOtherConstructorsChainTo(
+        IMethodSymbol targetConstructor,
+        INamedTypeSymbol containingType,
+        SyntaxNodeAnalysisContext context
+    )
+    {
+        foreach (var ctor in containingType.Constructors)
+        {
+            if (ctor.IsImplicitlyDeclared || ctor.IsStatic)
+                continue;
+
+            if (SymbolEqualityComparer.Default.Equals(ctor, targetConstructor))
+                continue;
+
+            // Check that this constructor chains to the target via : this(...)
+            foreach (var syntaxRef in ctor.DeclaringSyntaxReferences)
+            {
+                var ctorSyntax = syntaxRef.GetSyntax(context.CancellationToken) as ConstructorDeclarationSyntax;
+                if (ctorSyntax?.Initializer is not { } initializer)
+                    return false;
+
+                if (initializer.ThisOrBaseKeyword.Kind() is not SyntaxKind.ThisKeyword)
+                    return false;
+
+                var initSymbol = context.SemanticModel.GetSymbolInfo(initializer, context.CancellationToken).Symbol;
+                if (SymbolEqualityComparer.Default.Equals(initSymbol, targetConstructor) is false)
+                    return false;
+            }
+        }
+
+        return true;
+    }
+
+    private static bool IsValidMemberAssignmentConstructor(
+        ConstructorDeclarationSyntax constructorSyntax,
+        IMethodSymbol constructor,
+        INamedTypeSymbol containingType,
+        SyntaxNodeAnalysisContext context
+    )
+    {
+        var parameterSymbols = constructor.Parameters;
+        var accountedParameters = new HashSet<IParameterSymbol>(SymbolEqualityComparer.Default);
+        var semanticModel = context.SemanticModel;
+
+        // Account for parameters passed through in base/this initializer
+        if (constructorSyntax.Initializer is { ArgumentList.Arguments: { Count: > 0 } initializerArgs })
+        {
+            foreach (var arg in initializerArgs)
+            {
+                var argSymbol = semanticModel.GetSymbolInfo(arg.Expression, context.CancellationToken).Symbol;
+                if (
+                    argSymbol is IParameterSymbol initParam
+                    && parameterSymbols.Contains(initParam, SymbolEqualityComparer.Default)
+                )
+                {
+                    accountedParameters.Add(initParam);
+                }
+            }
+        }
+
+        // Collect assignments from block body or expression body
+        var assignments = new List<AssignmentExpressionSyntax>();
+
+        if (constructorSyntax.Body is { } body)
+        {
+            foreach (var statement in body.Statements)
+            {
+                if (
+                    statement
+                    is not ExpressionStatementSyntax
+                    {
+                        Expression: AssignmentExpressionSyntax
+                        {
+                            RawKind: (int)SyntaxKind.SimpleAssignmentExpression
+                        } assignment
+                    }
+                )
+                {
+                    return false;
+                }
+
+                assignments.Add(assignment);
+            }
+        }
+        else if (
+            constructorSyntax.ExpressionBody?.Expression is AssignmentExpressionSyntax
+            {
+                RawKind: (int)SyntaxKind.SimpleAssignmentExpression
+            } exprAssignment
+        )
+        {
+            assignments.Add(exprAssignment);
+        }
+
+        foreach (var assignment in assignments)
+        {
+            var leftSymbol = ResolveMemberSymbol(assignment.Left, semanticModel, context.CancellationToken);
+            if (leftSymbol is null)
+                return false;
+
+            if (SymbolEqualityComparer.Default.Equals(leftSymbol.ContainingType, containingType) is false)
+                return false;
+
+            var rightSymbol = semanticModel.GetSymbolInfo(assignment.Right, context.CancellationToken).Symbol;
+            if (rightSymbol is not IParameterSymbol paramSymbol)
+                return false;
+
+            if (parameterSymbols.Contains(paramSymbol, SymbolEqualityComparer.Default) is false)
+                return false;
+
+            accountedParameters.Add(paramSymbol);
+        }
+
+        return accountedParameters.Count == parameterSymbols.Length;
+    }
+
+    private static ISymbol? ResolveMemberSymbol(
+        ExpressionSyntax expression,
+        SemanticModel semanticModel,
+        CancellationToken cancellationToken
+    )
+    {
+        var target = expression switch
+        {
+            MemberAccessExpressionSyntax { Expression: ThisExpressionSyntax } memberAccess => memberAccess,
+            IdentifierNameSyntax => expression,
+            _ => null,
+        };
+
+        if (target is null)
+            return null;
+
+        var symbol = semanticModel.GetSymbolInfo(target, cancellationToken).Symbol;
+        return symbol is IFieldSymbol or IPropertySymbol ? symbol : null;
+    }
+}

@@ -1,5 +1,6 @@
 namespace DemoriLabs.CodeAnalysis.Tests.Unit.InvertIf;
 
+// ReSharper disable MemberCanBeMadeStatic.Global
 public partial class InvertIfToReduceNestingAnalyzerTests
 {
     [Test]
@@ -270,6 +271,80 @@ public partial class InvertIfToReduceNestingAnalyzerTests
 
                 private static void DoA() { }
                 private static void DoB() { }
+            }
+            """
+        );
+
+        await test.RunAsync();
+    }
+
+    [Test]
+    public async Task NoDiagnostic_SingleExitFollowedByExit_Return()
+    {
+        var test = CreateTest(
+            """
+            using System;
+            using System.Data;
+
+            public class C
+            {
+                private static string GetStringValue(DataRow row, int position)
+                {
+                    if (row[position] is string value)
+                    {
+                        return value;
+                    }
+
+                    throw new Exception();
+                }
+            }
+            """
+        );
+
+        await test.RunAsync();
+    }
+
+    [Test]
+    public async Task NoDiagnostic_SingleExitFollowedByExit_Throw()
+    {
+        var test = CreateTest(
+            """
+            using System;
+
+            public class C
+            {
+                public int M(bool condition)
+                {
+                    if (condition)
+                    {
+                        throw new InvalidOperationException();
+                    }
+
+                    return 0;
+                }
+            }
+            """
+        );
+
+        await test.RunAsync();
+    }
+
+    [Test]
+    public async Task NoDiagnostic_SingleExitFollowedByExit_BothReturn()
+    {
+        var test = CreateTest(
+            """
+            public class C
+            {
+                public int M(bool condition)
+                {
+                    if (condition)
+                    {
+                        return 1;
+                    }
+
+                    return 0;
+                }
             }
             """
         );

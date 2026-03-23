@@ -22,7 +22,7 @@ public sealed class CognitiveComplexityAnalyzer : DiagnosticAnalyzer
     private static readonly DiagnosticDescriptor ModerateRule = new(
         RuleIdentifiers.MethodHasModerateCognitiveComplexity,
         title: "Method has moderate cognitive complexity",
-        messageFormat: "Method '{0}' has a cognitive complexity of {1} (moderate threshold: {2})",
+        messageFormat: "Method '{0}' exceeds cognitive complexity threshold by {3} (threshold: {2}, actual: {1})",
         RuleCategories.Complexity,
         DiagnosticSeverity.Info,
         isEnabledByDefault: true,
@@ -32,7 +32,7 @@ public sealed class CognitiveComplexityAnalyzer : DiagnosticAnalyzer
     private static readonly DiagnosticDescriptor ElevatedRule = new(
         RuleIdentifiers.MethodHasElevatedCognitiveComplexity,
         title: "Method has elevated cognitive complexity",
-        messageFormat: "Method '{0}' has a cognitive complexity of {1} (elevated threshold: {2})",
+        messageFormat: "Method '{0}' exceeds cognitive complexity threshold by {3} (threshold: {2}, actual: {1})",
         RuleCategories.Complexity,
         DiagnosticSeverity.Warning,
         isEnabledByDefault: true,
@@ -83,7 +83,8 @@ public sealed class CognitiveComplexityAnalyzer : DiagnosticAnalyzer
                     methodSymbol.Locations[0],
                     methodSymbol.Name,
                     complexity,
-                    elevatedThreshold
+                    elevatedThreshold,
+                    complexity - elevatedThreshold
                 )
             );
         }
@@ -95,7 +96,8 @@ public sealed class CognitiveComplexityAnalyzer : DiagnosticAnalyzer
                     methodSymbol.Locations[0],
                     methodSymbol.Name,
                     complexity,
-                    moderateThreshold
+                    moderateThreshold,
+                    complexity - moderateThreshold
                 )
             );
         }

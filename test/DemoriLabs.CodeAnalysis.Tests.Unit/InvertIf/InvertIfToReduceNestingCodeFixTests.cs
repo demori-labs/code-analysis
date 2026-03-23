@@ -1,5 +1,5 @@
 using System.Diagnostics.CodeAnalysis;
-using DemoriLabs.CodeAnalysis.CodeFixes;
+using DemoriLabs.CodeAnalysis.CodeFixes.InvertIf;
 using DemoriLabs.CodeAnalysis.InvertIf;
 using Microsoft.CodeAnalysis.CSharp.Testing;
 using Microsoft.CodeAnalysis.Testing;
