@@ -3,6 +3,7 @@ using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.Diagnostics;
+using Microsoft.CodeAnalysis.Operations;
 
 namespace DemoriLabs.CodeAnalysis.MultipleEnumeration;
 
@@ -28,6 +29,7 @@ public sealed class MultipleEnumerationAnalyzer : DiagnosticAnalyzer
     {
         context.EnableConcurrentExecution();
         context.ConfigureGeneratedCodeAnalysis(GeneratedCodeAnalysisFlags.None);
+
         context.RegisterSyntaxNodeAction(
             AnalyzeBody,
             SyntaxKind.MethodDeclaration,
@@ -38,33 +40,24 @@ public sealed class MultipleEnumerationAnalyzer : DiagnosticAnalyzer
 
     private static void AnalyzeBody(SyntaxNodeAnalysisContext context)
     {
+        SeparatedSyntaxList<ParameterSyntax> parameterSyntax;
         SyntaxNode? body;
-        ImmutableArray<IParameterSymbol> parameters;
 
         switch (context.Node)
         {
             case MethodDeclarationSyntax method:
+                parameterSyntax = method.ParameterList.Parameters;
                 body = (SyntaxNode?)method.Body ?? method.ExpressionBody;
-                var methodSymbol = context.SemanticModel.GetDeclaredSymbol(method, context.CancellationToken);
-                if (methodSymbol is null)
-                    return;
-                parameters = methodSymbol.Parameters;
                 break;
 
             case ConstructorDeclarationSyntax ctor:
+                parameterSyntax = ctor.ParameterList.Parameters;
                 body = (SyntaxNode?)ctor.Body ?? ctor.ExpressionBody;
-                var ctorSymbol = context.SemanticModel.GetDeclaredSymbol(ctor, context.CancellationToken);
-                if (ctorSymbol is null)
-                    return;
-                parameters = ctorSymbol.Parameters;
                 break;
 
             case LocalFunctionStatementSyntax localFunc:
+                parameterSyntax = localFunc.ParameterList.Parameters;
                 body = (SyntaxNode?)localFunc.Body ?? localFunc.ExpressionBody;
-                var localFuncSymbol = context.SemanticModel.GetDeclaredSymbol(localFunc, context.CancellationToken);
-                if (localFuncSymbol is null)
-                    return;
-                parameters = localFuncSymbol.Parameters;
                 break;
 
             default:
@@ -74,14 +67,27 @@ public sealed class MultipleEnumerationAnalyzer : DiagnosticAnalyzer
         if (body is null)
             return;
 
-        var candidates = CollectCandidates(parameters, body, context.SemanticModel, context.CancellationToken);
-        if (candidates.Count is 0)
+        if (MayHaveIEnumerableCandidates(parameterSyntax, body) is false)
             return;
 
-        var finder = new EnumerationFinder(candidates, context.SemanticModel, context.CancellationToken);
-        finder.Visit(body);
+        var bodyOperation = context.SemanticModel.GetOperation(body, context.CancellationToken);
+        if (bodyOperation is null)
+            return;
 
-        foreach (var kvp in finder.Sites)
+        if (
+            context.SemanticModel.GetDeclaredSymbol(context.Node, context.CancellationToken)
+            is not IMethodSymbol methodSymbol
+        )
+        {
+            return;
+        }
+
+        var candidates = CollectParameterCandidates(methodSymbol.Parameters);
+        var sites = new Dictionary<ISymbol, List<Location>>(SymbolEqualityComparer.Default);
+
+        WalkOperations(bodyOperation, candidates, sites);
+
+        foreach (var kvp in sites)
         {
             if (kvp.Value.Count <= 1)
                 continue;
@@ -93,32 +99,104 @@ public sealed class MultipleEnumerationAnalyzer : DiagnosticAnalyzer
         }
     }
 
-    private static HashSet<ISymbol> CollectCandidates(
-        ImmutableArray<IParameterSymbol> parameters,
-        SyntaxNode body,
-        SemanticModel model,
-        CancellationToken ct
+    private static bool MayHaveIEnumerableCandidates(
+        SeparatedSyntaxList<ParameterSyntax> parameters,
+        SyntaxNode body
     )
+    {
+        foreach (var param in parameters)
+        {
+            if (TypeSyntaxMayBeIEnumerable(param.Type))
+                return true;
+        }
+
+        foreach (var node in body.DescendantNodes())
+        {
+            if (node is VariableDeclarationSyntax varDecl)
+            {
+                if (TypeSyntaxMayBeIEnumerable(varDecl.Type))
+                    return true;
+
+                if (varDecl.Type is IdentifierNameSyntax { Identifier.ValueText: "var" })
+                    return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static bool TypeSyntaxMayBeIEnumerable(TypeSyntax? type)
+    {
+        return type switch
+        {
+            GenericNameSyntax gen => gen.Identifier.ValueText is "IEnumerable",
+            IdentifierNameSyntax id => id.Identifier.ValueText is "IEnumerable",
+            QualifiedNameSyntax qual => TypeSyntaxMayBeIEnumerable(qual.Right),
+            NullableTypeSyntax nullable => TypeSyntaxMayBeIEnumerable(nullable.ElementType),
+            _ => false,
+        };
+    }
+
+    private static HashSet<ISymbol> CollectParameterCandidates(ImmutableArray<IParameterSymbol> parameters)
     {
         var candidates = new HashSet<ISymbol>(SymbolEqualityComparer.Default);
 
-        foreach (
-            var param in parameters.Where(p =>
-                IsIEnumerableType(p.Type) && !AnnotationAttributes.HasSuppressMultipleEnumerationAttribute(p)
-            )
-        )
+        foreach (var param in parameters)
         {
+            if (IsIEnumerableType(param.Type) is false)
+                continue;
+
+            if (AnnotationAttributes.HasSuppressMultipleEnumerationAttribute(param))
+                continue;
+
             candidates.Add(param);
         }
 
-        foreach (var declarator in body.DescendantNodes().OfType<VariableDeclaratorSyntax>())
-        {
-            var symbol = model.GetDeclaredSymbol(declarator, ct);
-            if (symbol is ILocalSymbol local && IsIEnumerableType(local.Type))
-                candidates.Add(local);
-        }
-
         return candidates;
+    }
+
+    private static void WalkOperations(
+        IOperation root,
+        HashSet<ISymbol> candidates,
+        Dictionary<ISymbol, List<Location>> sites
+    )
+    {
+        foreach (var operation in root.Descendants())
+        {
+            switch (operation)
+            {
+                case IAnonymousFunctionOperation:
+                case ILocalFunctionOperation:
+                    continue;
+
+                case IVariableDeclaratorOperation declarator
+                    when declarator.Symbol is ILocalSymbol local
+                        && IsIEnumerableType(local.Type)
+                        && IsInNestedScope(declarator, root) is false:
+                    candidates.Add(local);
+                    break;
+
+                case IForEachLoopOperation loop when IsInNestedScope(loop, root) is false:
+                    RecordIfCandidate(loop.Collection, candidates, sites);
+                    break;
+
+                case IInvocationOperation invocation
+                    when IsEnumeratingMethod(invocation.TargetMethod)
+                        && IsInNestedScope(invocation, root) is false:
+                    var target = invocation.TargetMethod.IsExtensionMethod
+                        ? invocation.Arguments.Length > 0
+                            ? invocation.Arguments[0].Value
+                            : null
+                        : invocation.Instance;
+
+                    if (target is not null)
+                    {
+                        RecordIfCandidate(target, candidates, sites);
+                    }
+
+                    break;
+            }
+        }
     }
 
     private static bool IsIEnumerableType(ITypeSymbol type)
@@ -127,96 +205,64 @@ public sealed class MultipleEnumerationAnalyzer : DiagnosticAnalyzer
             || type.SpecialType is SpecialType.System_Collections_IEnumerable;
     }
 
-    private sealed class EnumerationFinder(HashSet<ISymbol> candidates, SemanticModel model, CancellationToken ct)
-        : CSharpSyntaxWalker
+    private static bool IsInNestedScope(IOperation operation, IOperation root)
     {
-        private readonly Dictionary<ISymbol, List<Location>> _sites = new(SymbolEqualityComparer.Default);
-
-        public IReadOnlyDictionary<ISymbol, List<Location>> Sites => _sites;
-
-        public override void VisitForEachStatement(ForEachStatementSyntax node)
+        var parent = operation.Parent;
+        while (parent is not null && parent != root)
         {
-            RecordIfCandidate(node.Expression);
-            base.VisitForEachStatement(node);
-        }
-
-        public override void VisitForEachVariableStatement(ForEachVariableStatementSyntax node)
-        {
-            RecordIfCandidate(node.Expression);
-            base.VisitForEachVariableStatement(node);
-        }
-
-        public override void VisitInvocationExpression(InvocationExpressionSyntax node)
-        {
-            if (
-                node.Expression is MemberAccessExpressionSyntax memberAccess
-                && model.GetSymbolInfo(node, ct).Symbol is IMethodSymbol method
-                && IsEnumeratingMethod(method)
-            )
-            {
-                RecordIfCandidate(memberAccess.Expression);
-            }
-
-            base.VisitInvocationExpression(node);
-        }
-
-        public override void VisitFromClause(FromClauseSyntax node)
-        {
-            RecordIfCandidate(node.Expression);
-            base.VisitFromClause(node);
-        }
-
-        public override void VisitSimpleLambdaExpression(SimpleLambdaExpressionSyntax node)
-        {
-            // Prevents walking into nested scope
-        }
-
-        public override void VisitParenthesizedLambdaExpression(ParenthesizedLambdaExpressionSyntax node)
-        {
-            // Prevents walking into nested scope
-        }
-
-        public override void VisitAnonymousMethodExpression(AnonymousMethodExpressionSyntax node)
-        {
-            // Prevents walking into nested scope
-        }
-
-        public override void VisitLocalFunctionStatement(LocalFunctionStatementSyntax node)
-        {
-            // Prevents walking into nested scope
-        }
-
-        private void RecordIfCandidate(ExpressionSyntax expression)
-        {
-            var symbol = model.GetSymbolInfo(expression, ct).Symbol;
-
-            if (symbol is null || !candidates.Contains(symbol))
-                return;
-
-            if (!_sites.TryGetValue(symbol, out var list))
-            {
-                list = [];
-                _sites[symbol] = list;
-            }
-
-            list.Add(expression.GetLocation());
-        }
-
-        private static bool IsEnumeratingMethod(IMethodSymbol method)
-        {
-            if (string.Equals(method.Name, "GetEnumerator", StringComparison.OrdinalIgnoreCase))
+            if (parent is IAnonymousFunctionOperation or ILocalFunctionOperation)
                 return true;
 
-            var containingType = method.ContainingType;
-            if (containingType is null)
-                return false;
-
-            var ns = containingType.ContainingNamespace?.ToDisplayString();
-            return string.Equals(ns, "System.Linq", StringComparison.OrdinalIgnoreCase)
-                && (
-                    string.Equals(containingType.Name, "Enumerable", StringComparison.OrdinalIgnoreCase)
-                    || string.Equals(containingType.Name, "ParallelEnumerable", StringComparison.OrdinalIgnoreCase)
-                );
+            parent = parent.Parent;
         }
+
+        return false;
+    }
+
+    private static void RecordIfCandidate(
+        IOperation operation,
+        HashSet<ISymbol> candidates,
+        Dictionary<ISymbol, List<Location>> sites
+    )
+    {
+        while (operation is IConversionOperation { IsImplicit: true } conversion)
+        {
+            operation = conversion.Operand;
+        }
+
+        ISymbol? symbol = operation switch
+        {
+            IParameterReferenceOperation paramRef => paramRef.Parameter,
+            ILocalReferenceOperation localRef => localRef.Local,
+            _ => null,
+        };
+
+        if (symbol is null || candidates.Contains(symbol) is false)
+            return;
+
+        if (sites.TryGetValue(symbol, out var list) is false)
+        {
+            list = [];
+            sites[symbol] = list;
+        }
+
+        list.Add(operation.Syntax.GetLocation());
+    }
+
+    private static bool IsEnumeratingMethod(IMethodSymbol method)
+    {
+        if (string.Equals(method.Name, "GetEnumerator", StringComparison.Ordinal))
+            return true;
+
+        var containingType = method.ContainingType;
+        if (containingType is null)
+            return false;
+
+        var ns = containingType.ContainingNamespace?.ToDisplayString();
+        return string.Equals(ns, "System.Linq", StringComparison.Ordinal)
+            && (
+                string.Equals(containingType.Name, "Enumerable", StringComparison.Ordinal)
+                || string.Equals(containingType.Name, "ParallelEnumerable", StringComparison.Ordinal)
+            );
     }
 }

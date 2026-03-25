@@ -268,6 +268,103 @@ public class MultipleEnumerationAnalyzerTests
     }
 
     [Test]
+    public async Task LocalFunction_ReportsDiagnostic()
+    {
+        var test = CreateTest(
+            """
+            using System.Collections.Generic;
+            using System.Linq;
+
+            public class C
+            {
+                public void M()
+                {
+                    void Inner(IEnumerable<int> items)
+                    {
+                        var count = {|DL5001:items|}.Count();
+                        var list = {|DL5001:items|}.ToList();
+                    }
+                }
+            }
+            """
+        );
+
+        await test.RunAsync();
+    }
+
+    [Test]
+    public async Task MultipleIEnumerableParams_BothEnumeratedTwice_ReportsDiagnostic()
+    {
+        var test = CreateTest(
+            """
+            using System.Collections.Generic;
+            using System.Linq;
+
+            public class C
+            {
+                public void M(IEnumerable<int> a, IEnumerable<string> b)
+                {
+                    var x = {|DL5001:a|}.Count();
+                    var y = {|DL5001:a|}.Sum();
+                    foreach (var item in {|DL5001:b|}) { }
+                    var z = {|DL5001:b|}.First();
+                }
+            }
+            """
+        );
+
+        await test.RunAsync();
+    }
+
+    [Test]
+    public async Task MultipleIEnumerableParams_OnlyOneEnumeratedTwice_ReportsDiagnostic()
+    {
+        var test = CreateTest(
+            """
+            using System.Collections.Generic;
+            using System.Linq;
+
+            public class C
+            {
+                public void M(IEnumerable<int> a, IEnumerable<string> b)
+                {
+                    var x = {|DL5001:a|}.Count();
+                    var y = {|DL5001:a|}.Sum();
+                    var z = b.ToList();
+                }
+            }
+            """
+        );
+
+        await test.RunAsync();
+    }
+
+    [Test]
+    public async Task VarInferredAsIEnumerable_ReportsDiagnostic()
+    {
+        var test = CreateTest(
+            """
+            using System.Collections.Generic;
+            using System.Linq;
+
+            public class C
+            {
+                public void M()
+                {
+                    var items = GetItems();
+                    var count = {|DL5001:items|}.Count();
+                    var list = {|DL5001:items|}.ToList();
+                }
+
+                private IEnumerable<int> GetItems() => [];
+            }
+            """
+        );
+
+        await test.RunAsync();
+    }
+
+    [Test]
     public async Task SingleForEach_NoDiagnostic()
     {
         var test = CreateTest(
@@ -374,6 +471,50 @@ public class MultipleEnumerationAnalyzerTests
     }
 
     [Test]
+    public async Task IReadOnlyListType_NoDiagnostic()
+    {
+        var test = CreateTest(
+            """
+            using System.Collections.Generic;
+            using System.Linq;
+
+            public class C
+            {
+                public void M(IReadOnlyList<int> items)
+                {
+                    var count = items.Count();
+                    foreach (var x in items) { }
+                }
+            }
+            """
+        );
+
+        await test.RunAsync();
+    }
+
+    [Test]
+    public async Task ICollectionType_NoDiagnostic()
+    {
+        var test = CreateTest(
+            """
+            using System.Collections.Generic;
+            using System.Linq;
+
+            public class C
+            {
+                public void M(ICollection<int> items)
+                {
+                    var count = items.Count();
+                    foreach (var x in items) { }
+                }
+            }
+            """
+        );
+
+        await test.RunAsync();
+    }
+
+    [Test]
     public async Task ChainedLinq_SingleEnumeration_NoDiagnostic()
     {
         var test = CreateTest(
@@ -438,6 +579,54 @@ public class MultipleEnumerationAnalyzerTests
     }
 
     [Test]
+    public async Task EnumerationInAnonymousMethod_DoesNotAffectOuterScope()
+    {
+        var test = CreateTest(
+            """
+            using System;
+            using System.Collections.Generic;
+            using System.Linq;
+
+            public class C
+            {
+                public void M(IEnumerable<int> items)
+                {
+                    var list = items.ToList();
+                    Action a = delegate { foreach (var x in items) { } };
+                }
+            }
+            """
+        );
+
+        await test.RunAsync();
+    }
+
+    [Test]
+    public async Task EnumerationInLocalFunction_DoesNotAffectOuterScope()
+    {
+        var test = CreateTest(
+            """
+            using System.Collections.Generic;
+            using System.Linq;
+
+            public class C
+            {
+                public void M(IEnumerable<int> items)
+                {
+                    var list = items.ToList();
+                    void Inner()
+                    {
+                        foreach (var x in items) { }
+                    }
+                }
+            }
+            """
+        );
+
+        await test.RunAsync();
+    }
+
+    [Test]
     public async Task DifferentVariables_NoDiagnostic()
     {
         var test = CreateTest(
@@ -475,6 +664,51 @@ public class MultipleEnumerationAnalyzerTests
                     var count = items.Count();
                     foreach (var x in items) { }
                 }
+            }
+            """
+        );
+
+        await test.RunAsync();
+    }
+
+    [Test]
+    public async Task NoIEnumerableInvolved_NoDiagnostic()
+    {
+        var test = CreateTest(
+            """
+            using System;
+
+            public class C
+            {
+                public decimal M(decimal subtotal, int tier)
+                {
+                    var rate = tier switch
+                    {
+                        1 => 0.05m,
+                        2 => 0.10m,
+                        _ => 0m,
+                    };
+                    var discount = subtotal * rate;
+                    return Math.Max(discount, 0m);
+                }
+            }
+            """
+        );
+
+        await test.RunAsync();
+    }
+
+    [Test]
+    public async Task ExpressionBodiedMethod_ReportsDiagnostic()
+    {
+        var test = CreateTest(
+            """
+            using System.Collections.Generic;
+            using System.Linq;
+
+            public class C
+            {
+                public int M(IEnumerable<int> items) => {|DL5001:items|}.Count() + {|DL5001:items|}.Sum();
             }
             """
         );
