@@ -40,29 +40,13 @@ public sealed class MultipleEnumerationAnalyzer : DiagnosticAnalyzer
 
     private static void AnalyzeBody(SyntaxNodeAnalysisContext context)
     {
-        SeparatedSyntaxList<ParameterSyntax> parameterSyntax;
-        SyntaxNode? body;
-
-        switch (context.Node)
+        var (parameterSyntax, body) = context.Node switch
         {
-            case MethodDeclarationSyntax method:
-                parameterSyntax = method.ParameterList.Parameters;
-                body = (SyntaxNode?)method.Body ?? method.ExpressionBody;
-                break;
-
-            case ConstructorDeclarationSyntax ctor:
-                parameterSyntax = ctor.ParameterList.Parameters;
-                body = (SyntaxNode?)ctor.Body ?? ctor.ExpressionBody;
-                break;
-
-            case LocalFunctionStatementSyntax localFunc:
-                parameterSyntax = localFunc.ParameterList.Parameters;
-                body = (SyntaxNode?)localFunc.Body ?? localFunc.ExpressionBody;
-                break;
-
-            default:
-                return;
-        }
+            MethodDeclarationSyntax m => (m.ParameterList.Parameters, (SyntaxNode?)m.Body ?? m.ExpressionBody),
+            ConstructorDeclarationSyntax c => (c.ParameterList.Parameters, (SyntaxNode?)c.Body ?? c.ExpressionBody),
+            LocalFunctionStatementSyntax l => (l.ParameterList.Parameters, (SyntaxNode?)l.Body ?? l.ExpressionBody),
+            _ => (default, null),
+        };
 
         if (body is null)
             return;
@@ -99,10 +83,7 @@ public sealed class MultipleEnumerationAnalyzer : DiagnosticAnalyzer
         }
     }
 
-    private static bool MayHaveIEnumerableCandidates(
-        SeparatedSyntaxList<ParameterSyntax> parameters,
-        SyntaxNode body
-    )
+    private static bool MayHaveIEnumerableCandidates(SeparatedSyntaxList<ParameterSyntax> parameters, SyntaxNode body)
     {
         foreach (var param in parameters)
         {
@@ -112,13 +93,18 @@ public sealed class MultipleEnumerationAnalyzer : DiagnosticAnalyzer
 
         foreach (var node in body.DescendantNodes())
         {
-            if (node is VariableDeclarationSyntax varDecl)
-            {
-                if (TypeSyntaxMayBeIEnumerable(varDecl.Type))
-                    return true;
+            if (node is not VariableDeclarationSyntax varDecl)
+                continue;
 
-                if (varDecl.Type is IdentifierNameSyntax { Identifier.ValueText: "var" })
-                    return true;
+            if (TypeSyntaxMayBeIEnumerable(varDecl.Type))
+                return true;
+
+            if (
+                varDecl.Type is IdentifierNameSyntax id
+                && string.Equals(id.Identifier.ValueText, "var", StringComparison.Ordinal)
+            )
+            {
+                return true;
             }
         }
 
@@ -129,8 +115,8 @@ public sealed class MultipleEnumerationAnalyzer : DiagnosticAnalyzer
     {
         return type switch
         {
-            GenericNameSyntax gen => gen.Identifier.ValueText is "IEnumerable",
-            IdentifierNameSyntax id => id.Identifier.ValueText is "IEnumerable",
+            GenericNameSyntax gen => string.Equals(gen.Identifier.ValueText, "IEnumerable", StringComparison.Ordinal),
+            IdentifierNameSyntax id => string.Equals(id.Identifier.ValueText, "IEnumerable", StringComparison.Ordinal),
             QualifiedNameSyntax qual => TypeSyntaxMayBeIEnumerable(qual.Right),
             NullableTypeSyntax nullable => TypeSyntaxMayBeIEnumerable(nullable.ElementType),
             _ => false,
@@ -165,24 +151,18 @@ public sealed class MultipleEnumerationAnalyzer : DiagnosticAnalyzer
         {
             switch (operation)
             {
-                case IAnonymousFunctionOperation:
-                case ILocalFunctionOperation:
+                case IAnonymousFunctionOperation or ILocalFunctionOperation:
                     continue;
-
-                case IVariableDeclaratorOperation declarator
-                    when declarator.Symbol is ILocalSymbol local
-                        && IsIEnumerableType(local.Type)
-                        && IsInNestedScope(declarator, root) is false:
+                case IVariableDeclaratorOperation { Symbol: { } local }
+                    when IsIEnumerableType(local.Type) && IsInNestedScope(operation, root) is false:
                     candidates.Add(local);
                     break;
-
                 case IForEachLoopOperation loop when IsInNestedScope(loop, root) is false:
                     RecordIfCandidate(loop.Collection, candidates, sites);
                     break;
-
                 case IInvocationOperation invocation
-                    when IsEnumeratingMethod(invocation.TargetMethod)
-                        && IsInNestedScope(invocation, root) is false:
+                    when IsEnumeratingMethod(invocation.TargetMethod) && IsInNestedScope(invocation, root) is false:
+                {
                     var target = invocation.TargetMethod.IsExtensionMethod
                         ? invocation.Arguments.Length > 0
                             ? invocation.Arguments[0].Value
@@ -193,8 +173,8 @@ public sealed class MultipleEnumerationAnalyzer : DiagnosticAnalyzer
                     {
                         RecordIfCandidate(target, candidates, sites);
                     }
-
                     break;
+                }
             }
         }
     }
