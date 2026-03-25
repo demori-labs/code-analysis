@@ -41,7 +41,7 @@ public sealed class UsePrimaryConstructorAnalyzer : DiagnosticAnalyzer
         if (hasBody is false && hasExpressionBody is false)
             return;
 
-        if (hasBody && constructorSyntax.Body!.Statements.Count == 0 && constructorSyntax.Initializer is null)
+        if (hasBody && constructorSyntax.Body!.Statements.Count is 0 && constructorSyntax.Initializer is null)
             return;
 
         if (constructorSyntax.Parent is not TypeDeclarationSyntax typeDecl)
@@ -160,8 +160,8 @@ public sealed class UsePrimaryConstructorAnalyzer : DiagnosticAnalyzer
                     {
                         Expression: AssignmentExpressionSyntax
                         {
-                            RawKind: (int)SyntaxKind.SimpleAssignmentExpression
-                        } assignment
+                            RawKind: (int)SyntaxKind.SimpleAssignmentExpression,
+                        } assignment,
                     }
                 )
                 {
@@ -174,7 +174,7 @@ public sealed class UsePrimaryConstructorAnalyzer : DiagnosticAnalyzer
         else if (
             constructorSyntax.ExpressionBody?.Expression is AssignmentExpressionSyntax
             {
-                RawKind: (int)SyntaxKind.SimpleAssignmentExpression
+                RawKind: (int)SyntaxKind.SimpleAssignmentExpression,
             } exprAssignment
         )
         {

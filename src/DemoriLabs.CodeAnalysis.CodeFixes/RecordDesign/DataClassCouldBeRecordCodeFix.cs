@@ -66,7 +66,6 @@ public sealed class DataClassCouldBeRecordCodeFix : CodeFixProvider
         if (typeSymbol is null)
             return document.Project.Solution;
 
-        // Build constructor-to-property assignment map
         var constructor = FindSingleConstructor(classDecl);
         var ctorParamToProperty = new Dictionary<string, ConstructorAssignment>();
 
@@ -75,136 +74,204 @@ public sealed class DataClassCouldBeRecordCodeFix : CodeFixProvider
             BuildConstructorAssignmentMap(constructor, semanticModel, ctorParamToProperty, ct);
         }
 
-        // Find and annotate same-document call sites before modifying the tree
         var callSiteAnnotation = new SyntaxAnnotation("DL1004_CallSite");
         var otherDocCallSites = new Dictionary<DocumentId, List<SyntaxNode>>();
 
-        // Find the constructor symbol — either explicit or primary
         var ctorSymbolToFind = constructor is not null
             ? semanticModel.GetDeclaredSymbol(constructor, ct)
             : FindPrimaryConstructorSymbol(typeSymbol, ct);
 
         if (ctorSymbolToFind is not null)
         {
-            var references = await SymbolFinder
-                .FindReferencesAsync(ctorSymbolToFind, document.Project.Solution, ct)
+            var (sameDocCreations, otherDocRefs) = await CollectCallSiteReferencesAsync(
+                    ctorSymbolToFind,
+                    document,
+                    root,
+                    ct
+                )
                 .ConfigureAwait(false);
 
-            var sameDocCreations = new List<ObjectCreationExpressionSyntax>();
+            otherDocCallSites = otherDocRefs;
 
-            foreach (var reference in references)
-            {
-                foreach (var location in reference.Locations)
-                {
-                    if (location.Document.Id == document.Id)
-                    {
-                        var callNode = root.FindNode(location.Location.SourceSpan);
-                        var creation = callNode.FirstAncestorOrSelf<ObjectCreationExpressionSyntax>();
-                        if (creation?.ArgumentList is { Arguments.Count: > 0 })
-                            sameDocCreations.Add(creation);
-                    }
-                    else
-                    {
-                        if (!otherDocCallSites.TryGetValue(location.Document.Id, out var docList))
-                        {
-                            docList = [];
-                            otherDocCallSites[location.Document.Id] = docList;
-                        }
-
-                        var sourceRoot = await location.Location.SourceTree!.GetRootAsync(ct).ConfigureAwait(false);
-                        docList.Add(sourceRoot.FindNode(location.Location.SourceSpan));
-                    }
-                }
-            }
-
-            if (sameDocCreations.Count > 0)
-            {
-                root = root.ReplaceNodes(
-                    sameDocCreations,
-                    (_, rewritten) => rewritten.WithAdditionalAnnotations(callSiteAnnotation)
-                );
-                classDecl = root.DescendantNodes()
-                    .OfType<ClassDeclarationSyntax>()
-                    .First(c => c.Identifier.Text == classDecl.Identifier.Text);
-                constructor = FindSingleConstructor(classDecl);
-            }
+            (root, classDecl, constructor) = AnnotateSameDocumentCallSites(
+                root,
+                classDecl,
+                sameDocCreations,
+                callSiteAnnotation
+            );
         }
 
-        // Build property name list from constructor parameter order (for call site rewriting)
-        var parameterNames = new List<string>();
-        if (constructor is not null)
-        {
-            foreach (var param in constructor.ParameterList.Parameters)
-            {
-                if (ctorParamToProperty.TryGetValue(param.Identifier.Text, out var assignment))
-                {
-                    parameterNames.Add(assignment.PropertyName);
-                }
-            }
-        }
+        var parameterNames = constructor is not null
+            ? BuildParameterNamesFromConstructor(constructor, ctorParamToProperty)
+            : BuildParameterNamesFromPrimaryConstructor(classDecl);
 
-        // Detect properties initialised from primary constructor parameters
-        var primaryCtorParamNames = new HashSet<string>();
-        if (classDecl.ParameterList is not null)
-        {
-            foreach (var param in classDecl.ParameterList.Parameters)
-            {
-                primaryCtorParamNames.Add(param.Identifier.Text);
-            }
-
-            // Build parameter names for call site rewriting from primary constructor
-            if (constructor is null)
-            {
-                foreach (var member in classDecl.Members)
-                {
-                    if (
-                        member is PropertyDeclarationSyntax prop
-                        && IsInitialisedFromPrimaryConstructor(prop, primaryCtorParamNames)
-                    )
-                    {
-                        parameterNames.Add(prop.Identifier.Text);
-                    }
-                }
-            }
-        }
-
-        // Convert the class to a record
-        var newMembers = new List<MemberDeclarationSyntax>();
+        var primaryCtorParamNames = BuildPrimaryCtorParamNameSet(classDecl);
         var assignedPropertyNames = new HashSet<string>(ctorParamToProperty.Values.Select(static a => a.PropertyName));
 
+        var newMembers = ConvertClassMembersToRecordMembers(
+            classDecl,
+            assignedPropertyNames,
+            ctorParamToProperty,
+            primaryCtorParamNames
+        );
+
+        var recordDecl = BuildRecordDeclaration(classDecl, newMembers);
+        var newRoot = root.ReplaceNode(classDecl, recordDecl);
+        newRoot = RewriteSameDocumentCallSites(newRoot, callSiteAnnotation, parameterNames);
+
+        var currentSolution = document.Project.Solution.WithDocumentSyntaxRoot(document.Id, newRoot);
+
+        return await RewriteOtherDocumentCallSitesAsync(currentSolution, otherDocCallSites, parameterNames, ct)
+            .ConfigureAwait(false);
+    }
+
+    private static async Task<(
+        List<ObjectCreationExpressionSyntax> SameDocCreations,
+        Dictionary<DocumentId, List<SyntaxNode>> OtherDocCallSites
+    )> CollectCallSiteReferencesAsync(
+        IMethodSymbol ctorSymbol,
+        Document document,
+        SyntaxNode root,
+        CancellationToken ct
+    )
+    {
+        var sameDocCreations = new List<ObjectCreationExpressionSyntax>();
+        var otherDocCallSites = new Dictionary<DocumentId, List<SyntaxNode>>();
+
+        var references = await SymbolFinder
+            .FindReferencesAsync(ctorSymbol, document.Project.Solution, ct)
+            .ConfigureAwait(false);
+
+        foreach (var reference in references)
+        {
+            foreach (var location in reference.Locations)
+            {
+                if (location.Document.Id == document.Id)
+                {
+                    var callNode = root.FindNode(location.Location.SourceSpan);
+                    var creation = callNode.FirstAncestorOrSelf<ObjectCreationExpressionSyntax>();
+                    if (creation?.ArgumentList is { Arguments.Count: > 0 })
+                        sameDocCreations.Add(creation);
+                }
+                else
+                {
+                    if (otherDocCallSites.TryGetValue(location.Document.Id, out var docList) is false)
+                    {
+                        docList = [];
+                        otherDocCallSites[location.Document.Id] = docList;
+                    }
+
+                    var sourceRoot = await location.Location.SourceTree!.GetRootAsync(ct).ConfigureAwait(false);
+                    docList.Add(sourceRoot.FindNode(location.Location.SourceSpan));
+                }
+            }
+        }
+
+        return (sameDocCreations, otherDocCallSites);
+    }
+
+    private static (
+        SyntaxNode Root,
+        ClassDeclarationSyntax ClassDecl,
+        ConstructorDeclarationSyntax? Constructor
+    ) AnnotateSameDocumentCallSites(
+        SyntaxNode root,
+        ClassDeclarationSyntax classDecl,
+        List<ObjectCreationExpressionSyntax> sameDocCreations,
+        SyntaxAnnotation callSiteAnnotation
+    )
+    {
+        if (sameDocCreations.Count is 0)
+            return (root, classDecl, FindSingleConstructor(classDecl));
+
+        root = root.ReplaceNodes(
+            sameDocCreations,
+            (_, rewritten) => rewritten.WithAdditionalAnnotations(callSiteAnnotation)
+        );
+
+        classDecl = root.DescendantNodes()
+            .OfType<ClassDeclarationSyntax>()
+            .First(c => c.Identifier.Text == classDecl.Identifier.Text);
+
+        return (root, classDecl, FindSingleConstructor(classDecl));
+    }
+
+    private static List<string> BuildParameterNamesFromConstructor(
+        ConstructorDeclarationSyntax constructor,
+        Dictionary<string, ConstructorAssignment> ctorParamToProperty
+    )
+    {
+        var parameterNames = new List<string>();
+
+        foreach (var param in constructor.ParameterList.Parameters)
+        {
+            if (ctorParamToProperty.TryGetValue(param.Identifier.Text, out var assignment))
+            {
+                parameterNames.Add(assignment.PropertyName);
+            }
+        }
+
+        return parameterNames;
+    }
+
+    private static List<string> BuildParameterNamesFromPrimaryConstructor(ClassDeclarationSyntax classDecl)
+    {
+        var parameterNames = new List<string>();
+        var primaryCtorParamNames = BuildPrimaryCtorParamNameSet(classDecl);
+
+        if (primaryCtorParamNames.Count is 0)
+            return parameterNames;
+
+        foreach (var member in classDecl.Members)
+        {
+            if (
+                member is PropertyDeclarationSyntax prop
+                && IsInitialisedFromPrimaryConstructor(prop, primaryCtorParamNames)
+            )
+            {
+                parameterNames.Add(prop.Identifier.Text);
+            }
+        }
+
+        return parameterNames;
+    }
+
+    private static HashSet<string> BuildPrimaryCtorParamNameSet(ClassDeclarationSyntax classDecl)
+    {
+        var names = new HashSet<string>();
+
+        if (classDecl.ParameterList is null)
+            return names;
+
+        foreach (var param in classDecl.ParameterList.Parameters)
+        {
+            names.Add(param.Identifier.Text);
+        }
+
+        return names;
+    }
+
+    private static List<MemberDeclarationSyntax> ConvertClassMembersToRecordMembers(
+        ClassDeclarationSyntax classDecl,
+        HashSet<string> assignedPropertyNames,
+        Dictionary<string, ConstructorAssignment> ctorParamToProperty,
+        HashSet<string> primaryCtorParamNames
+    )
+    {
+        var newMembers = new List<MemberDeclarationSyntax>();
         SyntaxTriviaList? pendingTrivia = null;
 
         foreach (var member in classDecl.Members)
         {
             if (member is ConstructorDeclarationSyntax || IsMemberRemovedByRecordConversion(member))
             {
-                // Preserve leading trivia (blank lines) from removed members
                 var trivia = member.GetLeadingTrivia();
                 if (trivia.Any(static t => t.IsKind(SyntaxKind.EndOfLineTrivia)))
                     pendingTrivia = trivia;
                 continue;
             }
 
-            MemberDeclarationSyntax kept;
-            if (member is PropertyDeclarationSyntax property)
-            {
-                if (assignedPropertyNames.Contains(property.Identifier.Text))
-                {
-                    kept = ConvertConstructorAssignedProperty(property, ctorParamToProperty);
-                }
-                else if (IsInitialisedFromPrimaryConstructor(property, primaryCtorParamNames))
-                {
-                    kept = ConvertPrimaryCtorInitialisedProperty(property);
-                }
-                else
-                {
-                    kept = ConvertPropertyToImmutable(property);
-                }
-            }
-            else
-            {
-                kept = member;
-            }
+            var kept = ConvertSingleMember(member, assignedPropertyNames, ctorParamToProperty, primaryCtorParamNames);
 
             if (
                 pendingTrivia is not null
@@ -218,7 +285,33 @@ public sealed class DataClassCouldBeRecordCodeFix : CodeFixProvider
             newMembers.Add(kept);
         }
 
-        // Always seal the record
+        return newMembers;
+    }
+
+    private static MemberDeclarationSyntax ConvertSingleMember(
+        MemberDeclarationSyntax member,
+        HashSet<string> assignedPropertyNames,
+        Dictionary<string, ConstructorAssignment> ctorParamToProperty,
+        HashSet<string> primaryCtorParamNames
+    )
+    {
+        if (member is not PropertyDeclarationSyntax property)
+            return member;
+
+        if (assignedPropertyNames.Contains(property.Identifier.Text))
+            return ConvertConstructorAssignedProperty(property, ctorParamToProperty);
+
+        if (IsInitialisedFromPrimaryConstructor(property, primaryCtorParamNames))
+            return ConvertPrimaryCtorInitialisedProperty(property);
+
+        return ConvertPropertyToImmutable(property);
+    }
+
+    private static RecordDeclarationSyntax BuildRecordDeclaration(
+        ClassDeclarationSyntax classDecl,
+        List<MemberDeclarationSyntax> newMembers
+    )
+    {
         var modifiers = classDecl.Modifiers;
         if (modifiers.Any(SyntaxKind.SealedKeyword) is false)
         {
@@ -228,15 +321,13 @@ public sealed class DataClassCouldBeRecordCodeFix : CodeFixProvider
                 insertIndex >= 0 ? modifiers.Insert(insertIndex + 1, sealedToken) : modifiers.Insert(0, sealedToken);
         }
 
-        var baseList = classDecl.BaseList;
-
         var recordKeyword = SyntaxFactory.Token(SyntaxKind.RecordKeyword).WithTrailingTrivia(SyntaxFactory.Space);
 
-        var recordDecl = SyntaxFactory
+        return SyntaxFactory
             .RecordDeclaration(recordKeyword, classDecl.Identifier)
             .WithModifiers(modifiers)
             .WithTypeParameterList(classDecl.TypeParameterList)
-            .WithBaseList(baseList)
+            .WithBaseList(classDecl.BaseList)
             .WithConstraintClauses(classDecl.ConstraintClauses)
             .WithOpenBraceToken(classDecl.OpenBraceToken)
             .WithCloseBraceToken(classDecl.CloseBraceToken)
@@ -246,31 +337,38 @@ public sealed class DataClassCouldBeRecordCodeFix : CodeFixProvider
             .WithLeadingTrivia(classDecl.GetLeadingTrivia())
             .WithTrailingTrivia(classDecl.GetTrailingTrivia())
             .WithAdditionalAnnotations(Formatter.Annotation);
+    }
 
-        var newRoot = root.ReplaceNode(classDecl, recordDecl);
-
-        // Rewrite same-document call sites (found by annotation)
-        var annotatedCallSites = newRoot
-            .GetAnnotatedNodes(callSiteAnnotation)
+    private static SyntaxNode RewriteSameDocumentCallSites(
+        SyntaxNode root,
+        SyntaxAnnotation callSiteAnnotation,
+        List<string> parameterNames
+    )
+    {
+        var annotatedCallSites = root.GetAnnotatedNodes(callSiteAnnotation)
             .OfType<ObjectCreationExpressionSyntax>()
             .Where(c => c.ArgumentList is { Arguments.Count: > 0 })
             .ToList();
 
-        if (annotatedCallSites.Count > 0)
-        {
-            newRoot = newRoot.ReplaceNodes(
-                annotatedCallSites,
-                (original, _) =>
-                    RewriteCallSite(original, parameterNames).WithAdditionalAnnotations(Formatter.Annotation)
-            );
-        }
+        if (annotatedCallSites.Count is 0)
+            return root;
 
-        var currentSolution = document.Project.Solution.WithDocumentSyntaxRoot(document.Id, newRoot);
+        return root.ReplaceNodes(
+            annotatedCallSites,
+            (original, _) => RewriteCallSite(original, parameterNames).WithAdditionalAnnotations(Formatter.Annotation)
+        );
+    }
 
-        // Rewrite call sites in other documents
+    private static async Task<Solution> RewriteOtherDocumentCallSitesAsync(
+        Solution solution,
+        Dictionary<DocumentId, List<SyntaxNode>> otherDocCallSites,
+        List<string> parameterNames,
+        CancellationToken ct
+    )
+    {
         foreach (var kvp in otherDocCallSites)
         {
-            var targetDoc = currentSolution.GetDocument(kvp.Key);
+            var targetDoc = solution.GetDocument(kvp.Key);
             if (targetDoc is null)
                 continue;
 
@@ -284,18 +382,18 @@ public sealed class DataClassCouldBeRecordCodeFix : CodeFixProvider
                 .Cast<ObjectCreationExpressionSyntax>()
                 .ToList();
 
-            if (creationsToRewrite.Count > 0)
-            {
-                var rewrittenRoot = targetRoot.ReplaceNodes(
-                    creationsToRewrite,
-                    (original, _) =>
-                        RewriteCallSite(original, parameterNames).WithAdditionalAnnotations(Formatter.Annotation)
-                );
-                currentSolution = currentSolution.WithDocumentSyntaxRoot(kvp.Key, rewrittenRoot);
-            }
+            if (creationsToRewrite.Count <= 0)
+                continue;
+
+            var rewrittenRoot = targetRoot.ReplaceNodes(
+                creationsToRewrite,
+                (original, _) =>
+                    RewriteCallSite(original, parameterNames).WithAdditionalAnnotations(Formatter.Annotation)
+            );
+            solution = solution.WithDocumentSyntaxRoot(kvp.Key, rewrittenRoot);
         }
 
-        return currentSolution;
+        return solution;
     }
 
     private static IMethodSymbol? FindPrimaryConstructorSymbol(INamedTypeSymbol typeSymbol, CancellationToken ct)
@@ -326,7 +424,7 @@ public sealed class DataClassCouldBeRecordCodeFix : CodeFixProvider
                 continue;
 
             if (found is not null)
-                return null; // Multiple constructors — don't handle
+                return null;
 
             found = ctor;
         }
@@ -352,8 +450,8 @@ public sealed class DataClassCouldBeRecordCodeFix : CodeFixProvider
                     {
                         Expression: AssignmentExpressionSyntax
                         {
-                            RawKind: (int)SyntaxKind.SimpleAssignmentExpression
-                        } assignment
+                            RawKind: (int)SyntaxKind.SimpleAssignmentExpression,
+                        } assignment,
                     }
                 )
                 {
@@ -364,7 +462,7 @@ public sealed class DataClassCouldBeRecordCodeFix : CodeFixProvider
         else if (
             constructor.ExpressionBody?.Expression is AssignmentExpressionSyntax
             {
-                RawKind: (int)SyntaxKind.SimpleAssignmentExpression
+                RawKind: (int)SyntaxKind.SimpleAssignmentExpression,
             } exprAssignment
         )
         {
@@ -409,14 +507,12 @@ public sealed class DataClassCouldBeRecordCodeFix : CodeFixProvider
 
         if (assignment?.DefaultValue is not null)
         {
-            // Has default value — not required, add initializer
             newProperty = newProperty
                 .WithInitializer(SyntaxFactory.EqualsValueClause(assignment.DefaultValue.WithoutTrivia()))
                 .WithSemicolonToken(SyntaxFactory.Token(SyntaxKind.SemicolonToken));
         }
         else if (property.Modifiers.Any(m => m.IsKind(SyntaxKind.RequiredKeyword)) is false)
         {
-            // No default — add required
             var requiredToken = SyntaxFactory.Token(SyntaxKind.RequiredKeyword).WithTrailingTrivia(SyntaxFactory.Space);
 
             var publicIndex = newProperty.Modifiers.IndexOf(SyntaxKind.PublicKeyword);
@@ -461,18 +557,17 @@ public sealed class DataClassCouldBeRecordCodeFix : CodeFixProvider
             }
         }
 
-        // Get-only property — add init accessor
-        if (needsInit)
-        {
-            var lastAccessor = newAccessors[newAccessors.Count - 1];
-            newAccessors.Add(
-                SyntaxFactory
-                    .AccessorDeclaration(SyntaxKind.InitAccessorDeclaration)
-                    .WithSemicolonToken(SyntaxFactory.Token(SyntaxKind.SemicolonToken))
-                    .WithLeadingTrivia(lastAccessor.GetLeadingTrivia())
-                    .WithTrailingTrivia(lastAccessor.GetTrailingTrivia())
-            );
-        }
+        if (needsInit is false)
+            return property.WithAccessorList(property.AccessorList.WithAccessors(SyntaxFactory.List(newAccessors)));
+
+        var lastAccessor = newAccessors[newAccessors.Count - 1];
+        newAccessors.Add(
+            SyntaxFactory
+                .AccessorDeclaration(SyntaxKind.InitAccessorDeclaration)
+                .WithSemicolonToken(SyntaxFactory.Token(SyntaxKind.SemicolonToken))
+                .WithLeadingTrivia(lastAccessor.GetLeadingTrivia())
+                .WithTrailingTrivia(lastAccessor.GetTrailingTrivia())
+        );
 
         return property.WithAccessorList(property.AccessorList.WithAccessors(SyntaxFactory.List(newAccessors)));
     }
@@ -486,7 +581,7 @@ public sealed class DataClassCouldBeRecordCodeFix : CodeFixProvider
         var hasSetter = property.AccessorList.Accessors.Any(a => a.IsKind(SyntaxKind.SetAccessorDeclaration));
         var hasInit = property.AccessorList.Accessors.Any(a => a.IsKind(SyntaxKind.InitAccessorDeclaration));
 
-        if (!hasSetter && !hasInit)
+        if (hasSetter is false && hasInit is false)
             return property;
 
         var newProperty = property;
@@ -532,7 +627,10 @@ public sealed class DataClassCouldBeRecordCodeFix : CodeFixProvider
         return newProperty;
     }
 
-    private static ExpressionSyntax RewriteCallSite(ObjectCreationExpressionSyntax creation, List<string> propertyNames)
+    private static ObjectCreationExpressionSyntax RewriteCallSite(
+        ObjectCreationExpressionSyntax creation,
+        List<string> propertyNames
+    )
     {
         if (creation.ArgumentList is null)
             return creation;
@@ -578,16 +676,16 @@ public sealed class DataClassCouldBeRecordCodeFix : CodeFixProvider
     {
         var newProperty = EnsureGetInit(property).WithInitializer(null).WithSemicolonToken(default);
 
-        if (property.Modifiers.Any(m => m.IsKind(SyntaxKind.RequiredKeyword)) is false)
-        {
-            var requiredToken = SyntaxFactory.Token(SyntaxKind.RequiredKeyword).WithTrailingTrivia(SyntaxFactory.Space);
+        if (property.Modifiers.Any(m => m.IsKind(SyntaxKind.RequiredKeyword)) is true)
+            return newProperty;
 
-            var publicIndex = newProperty.Modifiers.IndexOf(SyntaxKind.PublicKeyword);
-            newProperty =
-                publicIndex >= 0
-                    ? newProperty.WithModifiers(newProperty.Modifiers.Insert(publicIndex + 1, requiredToken))
-                    : newProperty.AddModifiers(requiredToken);
-        }
+        var requiredToken = SyntaxFactory.Token(SyntaxKind.RequiredKeyword).WithTrailingTrivia(SyntaxFactory.Space);
+
+        var publicIndex = newProperty.Modifiers.IndexOf(SyntaxKind.PublicKeyword);
+        newProperty =
+            publicIndex >= 0
+                ? newProperty.WithModifiers(newProperty.Modifiers.Insert(publicIndex + 1, requiredToken))
+                : newProperty.AddModifiers(requiredToken);
 
         return newProperty;
     }
@@ -596,19 +694,16 @@ public sealed class DataClassCouldBeRecordCodeFix : CodeFixProvider
     {
         return member switch
         {
-            // override bool Equals(object?) — record synthesises this
             MethodDeclarationSyntax { Identifier.Text: "Equals" } method => method.ParameterList.Parameters.Count == 1
                 && method.ParameterList.Parameters[0].Type
                     is PredefinedTypeSyntax { Keyword.RawKind: (int)SyntaxKind.ObjectKeyword }
                         or NullableTypeSyntax
                         {
-                            ElementType: PredefinedTypeSyntax { Keyword.RawKind: (int)SyntaxKind.ObjectKeyword }
+                            ElementType: PredefinedTypeSyntax { Keyword.RawKind: (int)SyntaxKind.ObjectKeyword },
                         },
-            // operator == and operator !=
             OperatorDeclarationSyntax op => op.OperatorToken.Kind()
                 is SyntaxKind.EqualsEqualsToken
                     or SyntaxKind.ExclamationEqualsToken,
-            // PrintMembers — compiler-reserved
             MethodDeclarationSyntax { Identifier.Text: "PrintMembers" } => true,
             _ => false,
         };

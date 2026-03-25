@@ -19,10 +19,10 @@
     </PropertyGroup>
 
     <ItemGroup>
-        <InternalsVisibleTo Include="DemoriLabs.CodeAnalysis.Tests.Unit" />
-    </ItemGroup>
-
-    <ItemGroup>
+        <PackageReference Include="Meziantou.Polyfill">
+            <PrivateAssets>all</PrivateAssets>
+            <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+        </PackageReference>
         <PackageReference Include="Microsoft.CodeAnalysis.Analyzers">
             <PrivateAssets>all</PrivateAssets>
             <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
@@ -32,6 +32,11 @@
             <PrivateAssets>all</PrivateAssets>
             <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
         </PackageReference>
+    </ItemGroup>
+
+    <ItemGroup>
+        <Content Remove="buildTransitive\**" />
+        <None Remove="buildTransitive\**" />
     </ItemGroup>
 
     <ItemGroup>

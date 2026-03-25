@@ -10,8 +10,15 @@ namespace DemoriLabs.CodeAnalysis.CognitiveComplexity;
 [DiagnosticAnalyzer(LanguageNames.CSharp)]
 public sealed class CognitiveComplexityAnalyzer : DiagnosticAnalyzer
 {
-    internal const int DefaultModerateThreshold = 5;
-    internal const int DefaultElevatedThreshold = 12;
+    /// <summary>
+    /// The default cognitive complexity threshold at which a method is considered moderately complex.
+    /// </summary>
+    public const int DefaultModerateThreshold = 7;
+
+    /// <summary>
+    /// The default cognitive complexity threshold at which a method is considered highly complex.
+    /// </summary>
+    public const int DefaultElevatedThreshold = 15;
 
     private const string ModerateThresholdOptionKey =
         "dotnet_diagnostic.DL4001.cognitive_complexity_moderate_threshold";

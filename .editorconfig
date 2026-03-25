@@ -109,7 +109,7 @@ resharper_align_multiline_statement_conditions = false
 resharper_align_multiple_declaration = false
 resharper_align_multline_type_parameter_list = false
 resharper_align_multline_type_parameter_constrains = false
-resharper_align_multiline_comments = true 
+resharper_align_multiline_comments = true
 resharper_indent_raw_literal_string = indent
 resharper_int_align = false
 resharper_keep_existing_linebreaks = true
@@ -156,6 +156,7 @@ resharper_csharp_wrap_parameters_style = chop_if_long
 resharper_wrap_chained_method_calls = chop_if_long
 
 # ReSharper inspection severities
+resharper_redundant_bool_compare_highlighting = none
 resharper_accessor_owner_body = expression_body
 resharper_attribute_style = on_different_lines
 resharper_csharp_null_checking_pattern_style = not_null_pattern
@@ -192,7 +193,7 @@ dotnet_naming_rule.private_instance_field_should_be_camel_case.style = prefix_un
 
 dotnet_naming_symbols.private_instance_field.applicable_kinds = field
 dotnet_naming_symbols.private_instance_field.applicable_accessibilities = private, protected
-dotnet_naming_symbols.private_instance_field.required_modifiers =
+dotnet_naming_symbols.private_instance_field.required_modifiers = 
 
 dotnet_naming_style.prefix_underscore.capitalization = camel_case
 dotnet_naming_style.prefix_underscore.required_prefix = _
@@ -222,7 +223,7 @@ dotnet_naming_rule.property_names_should_be_pascal_case.style = pascal_case
 
 dotnet_naming_symbols.properties.applicable_kinds = property
 dotnet_naming_symbols.properties.applicable_accessibilities = *
-dotnet_naming_symbols.properties.required_modifiers =
+dotnet_naming_symbols.properties.required_modifiers = 
 
 ## Method names use PascalCase
 dotnet_naming_rule.methods_should_be_pascal_case.severity = warning
@@ -231,7 +232,7 @@ dotnet_naming_rule.methods_should_be_pascal_case.style = pascal_case
 
 dotnet_naming_symbols.methods.applicable_kinds = method
 dotnet_naming_symbols.methods.applicable_accessibilities = *
-dotnet_naming_symbols.methods.required_modifiers =
+dotnet_naming_symbols.methods.required_modifiers = 
 
 ## Parameter names use camelCase
 dotnet_naming_rule.method_parameters_should_be_camel_case.severity = warning
@@ -240,7 +241,7 @@ dotnet_naming_rule.method_parameters_should_be_camel_case.style = camel_case
 
 dotnet_naming_symbols.method_parameters.applicable_kinds = parameter
 dotnet_naming_symbols.method_parameters.applicable_accessibilities = *
-dotnet_naming_symbols.method_parameters.required_modifiers =
+dotnet_naming_symbols.method_parameters.required_modifiers = 
 
 ## Variable names use camelCase
 dotnet_naming_rule.variable_naming.severity = warning
@@ -249,7 +250,7 @@ dotnet_naming_rule.variable_naming.style = camel_case
 
 dotnet_naming_symbols.variable_symbols.applicable_kinds = local
 dotnet_naming_symbols.variable_symbols.applicable_accessibilities = *
-dotnet_naming_symbols.variable_symbols.required_modifiers =
+dotnet_naming_symbols.variable_symbols.required_modifiers = 
 
 ## Interface names use PascalCase and I prefix
 dotnet_naming_rule.interfaces_should_start_with_i.severity = warning
@@ -258,7 +259,7 @@ dotnet_naming_rule.interfaces_should_start_with_i.style = prefix_i
 
 dotnet_naming_symbols.interfaces.applicable_kinds = interface
 dotnet_naming_symbols.interfaces.applicable_accessibilities = *
-dotnet_naming_symbols.interfaces.required_modifiers =
+dotnet_naming_symbols.interfaces.required_modifiers = 
 
 dotnet_naming_style.prefix_i.capitalization = pascal_case
 dotnet_naming_style.prefix_i.required_prefix = I
@@ -294,225 +295,224 @@ dotnet_naming_symbols.enums.applicable_accessibilities = *
 # ------------------------------------------
 
 # CA1001: Types that own disposable fields should be disposable
-dotnet_diagnostic.CA1001.severity = warning
+dotnet_diagnostic.ca1001.severity = warning
 
 # CA1063: Implement IDisposable correctly
-dotnet_diagnostic.CA1063.severity = warning
+dotnet_diagnostic.ca1063.severity = warning
 
 # CA1065: Do not raise exceptions in unexpected locations
-dotnet_diagnostic.CA1065.severity = error
+dotnet_diagnostic.ca1065.severity = error
 
 # CA1068: CancellationToken parameters must come last
-dotnet_diagnostic.CA1068.severity = warning
+dotnet_diagnostic.ca1068.severity = warning
 
 
 # Quality Rules
 # ------------------------------------------
 
 # CA1047: Do not declare protected member in sealed type
-dotnet_diagnostic.CA1047.severity = error
+dotnet_diagnostic.ca1047.severity = error
 
 ## Maintainability Rules
 #-----
 
 # CA1514: Avoid redundant length argument
-dotnet_diagnostic.CA1514.severity = warning
+dotnet_diagnostic.ca1514.severity = warning
 
 
 ## Performance Rules
 # ------------------------------------------
 
 # CA1802: Use literals where appropriate
-dotnet_diagnostic.CA1802.severity = error
+dotnet_diagnostic.ca1802.severity = error
 
 # CA1805: Do not initialize unnecessarily
-dotnet_diagnostic.CA1805.severity = error
+dotnet_diagnostic.ca1805.severity = error
 
 # CA1821: Remove empty Finalizers
-dotnet_diagnostic.CA1821.severity = error
+dotnet_diagnostic.ca1821.severity = error
 
 # CA1823: Avoid unused private fields
-dotnet_diagnostic.CA1823.severity = warning
+dotnet_diagnostic.ca1823.severity = warning
 
 # CA1825: Avoid zero-length array allocations
-dotnet_diagnostic.CA1825.severity = error
+dotnet_diagnostic.ca1825.severity = error
 
 # CA1827: Do not use Count() or LongCount() when Any() can be used
-dotnet_diagnostic.CA1827.severity = error
+dotnet_diagnostic.ca1827.severity = error
 
 # CA1828: Do not use CountAsync() or LongCountAsync() when AnyAsync() can be used
-dotnet_diagnostic.CA1828.severity = error
+dotnet_diagnostic.ca1828.severity = error
 
 # CA1829: Use Length/Count property instead of Count() when available
-dotnet_diagnostic.CA1829.severity = warning
+dotnet_diagnostic.ca1829.severity = warning
 
 # CA1830: Prefer strongly-typed Append and Insert method overloads on StringBuilder
-dotnet_diagnostic.CA1830.severity = error
+dotnet_diagnostic.ca1830.severity = error
 
 # CA1834: Consider using 'StringBuilder.Append(char)' when applicable
-dotnet_diagnostic.CA1834.severity = error
+dotnet_diagnostic.ca1834.severity = error
 
 # CA1836: Prefer IsEmpty over Count
-dotnet_diagnostic.CA1836.severity = error
+dotnet_diagnostic.ca1836.severity = error
 
 # CA1841: Prefer Dictionary.Contains methods
-dotnet_diagnostic.CA1841.severity = error
+dotnet_diagnostic.ca1841.severity = error
 
 # CA1842: Do not use 'WhenAll' with a single task
-dotnet_diagnostic.CA1842.severity = error
+dotnet_diagnostic.ca1842.severity = error
 
 # CA1843: Do not use 'WaitAll' with a single task
-dotnet_diagnostic.CA1843.severity = error
+dotnet_diagnostic.ca1843.severity = error
 
 # CA1847: Use string.Contains(char) instead of string.Contains(string) with single characters
-dotnet_diagnostic.CA1847.severity = error
+dotnet_diagnostic.ca1847.severity = error
 
 # CA1853: Unnecessary call to 'Dictionary.ContainsKey(key)'
-dotnet_diagnostic.CA1853.severity = error
+dotnet_diagnostic.ca1853.severity = error
 
 # CA1854: Prefer the IDictionary.TryGetValue(TKey, out TValue) method
-dotnet_diagnostic.CA1854.severity = error
+dotnet_diagnostic.ca1854.severity = error
 
 # CA1858: Use 'StartsWith' instead of 'IndexOf'
-dotnet_diagnostic.CA1858.severity = warning
+dotnet_diagnostic.ca1858.severity = warning
 
 # CA1862: Use the 'StringComparison' method overloads to perform case-insensitive string comparisons
-dotnet_diagnostic.CA1862.severity = warning
+dotnet_diagnostic.ca1862.severity = warning
 
 # CA1870: Use a cached 'SearchValues' instance
-dotnet_diagnostic.CA1870.severity = warning
+dotnet_diagnostic.ca1870.severity = warning
 
 ## Usage Rules
 # ------------------------------------------
 # CA1816: Call GC.SuppressFinalize correctly
-dotnet_diagnostic.CA1816.severity = warning
+dotnet_diagnostic.ca1816.severity = warning
 
 
 # CA2213: Disposable fields should be disposed
-dotnet_diagnostic.CA2213.severity = warning
+dotnet_diagnostic.ca2213.severity = warning
 
 # CA2215: Dispose methods should call base class dispose
-dotnet_diagnostic.CA2215.severity = warning
+dotnet_diagnostic.ca2215.severity = warning
 
 
 # CA2214: Do not call overridable methods in constructors
-dotnet_diagnostic.CA2214.severity = warning
+dotnet_diagnostic.ca2214.severity = warning
 
 # CA2249: Consider using String.Contains instead of String.IndexOf
-dotnet_diagnostic.CA2249.severity = warning
+dotnet_diagnostic.ca2249.severity = warning
 
 # CA2251: Use String.Equals over String.Compare
-dotnet_diagnostic.CA2251.severity = warning
+dotnet_diagnostic.ca2251.severity = warning
 
 # CA2250: Use ThrowIfCancellationRequested
-dotnet_diagnostic.CA2250.severity = error
+dotnet_diagnostic.ca2250.severity = error
 
 # CA2263: Prefer generic overload when type is known
-dotnet_diagnostic.CA2263.severity = error
+dotnet_diagnostic.ca2263.severity = error
 
 
 ## Reliability Rules
 # ------------------------------------------
 
 # CA2009: Do not call ToImmutableCollection on an ImmutableCollection value
-dotnet_diagnostic.CA2009.severity = warning
+dotnet_diagnostic.ca2009.severity = warning
 
 # CA2016: Forward the 'CancellationToken' parameter to methods that take one
-dotnet_diagnostic.CA2016.severity = error
+dotnet_diagnostic.ca2016.severity = error
 
 
 ## Style Rules
 # ------------------------------------------
 # IDE0007: Use 'var' instead of explicit type when the type is apparent.
-dotnet_diagnostic.IDE0007.severity = none
+dotnet_diagnostic.ide0007.severity = none
 
 # IDE0008: Use explicit type instead of 'var'.
-dotnet_diagnostic.IDE0008.severity = none
+dotnet_diagnostic.ide0008.severity = none
 
 # IDE0011: Always use braces {} for code blocks, even for single lines.
-dotnet_diagnostic.IDE0011.severity = warning
+dotnet_diagnostic.ide0011.severity = warning
 
 # IDE0019: Use pattern matching to avoid 'as' followed by a 'null' check.
-dotnet_diagnostic.IDE0019.severity = error
+dotnet_diagnostic.ide0019.severity = error
 
 # IDE0020: Use pattern matching to combine an 'is' check and a cast.
-dotnet_diagnostic.IDE0020.severity = error
+dotnet_diagnostic.ide0020.severity = error
 
 # IDE0036: Enforce a consistent order for modifiers (e.g., 'public static').
-dotnet_diagnostic.IDE0036.severity = suggestion
+dotnet_diagnostic.ide0036.severity = suggestion
 
 # IDE0038: Use pattern matching to avoid 'is' check followed by a cast.
-dotnet_diagnostic.IDE0038.severity = error
+dotnet_diagnostic.ide0038.severity = error
 
 # IDE0041: Use 'is null' check
-dotnet_diagnostic.IDE0041.severity = warning
+dotnet_diagnostic.ide0041.severity = warning
 
 # IDE0065: Place 'using' directives inside the namespace declaration.
-dotnet_diagnostic.IDE0065.severity = warning
+dotnet_diagnostic.ide0065.severity = warning
 
 # IDE0066: Convert 'switch' statements to the more concise 'switch' expression.
-dotnet_diagnostic.IDE0066.severity = error
+dotnet_diagnostic.ide0066.severity = error
 
 # IDE0070: Use 'System.HashCode.Combine' to implement GetHashCode().
-dotnet_diagnostic.IDE0070.severity = error
+dotnet_diagnostic.ide0070.severity = error
 
 # IDE0078: Use pattern matching to improve code clarity and conciseness.
-dotnet_diagnostic.IDE0078.severity = warning
+dotnet_diagnostic.ide0078.severity = warning
 
 # IDE0082: Use compile-time safe 'nameof(T)' instead of 'typeof(T).Name'.
-dotnet_diagnostic.IDE0082.severity = error
+dotnet_diagnostic.ide0082.severity = error
 
 # IDE0083: Use the 'is not' pattern for negated type checks.
-dotnet_diagnostic.IDE0083.severity = error
+dotnet_diagnostic.ide0083.severity = error
 
 # IDE0260: Use primary constructors for simple constructor-to-property assignments (C# 12+).
-dotnet_diagnostic.IDE0260.severity = warning
+dotnet_diagnostic.ide0260.severity = warning
 
 # Disable all documentation rules (SA1600-SA1652)
-dotnet_diagnostic.SA1633.severity = none
-dotnet_diagnostic.SA1009.severity = none
-dotnet_diagnostic.SA1111.severity = none
-dotnet_analyzer_diagnostic.category-StyleCop.CSharp.DocumentationRules.severity = none
+dotnet_diagnostic.sa1633.severity = none
+dotnet_diagnostic.sa1009.severity = none
+dotnet_diagnostic.sa1111.severity = none
+dotnet_analyzer_diagnostic.category-stylecop.csharp.documentationrules.severity = none
 
 # Sonar Rules
-dotnet_diagnostic.S1125.severity = none
-dotnet_diagnostic.S2325.severity = none
+dotnet_diagnostic.s1125.severity = none
+dotnet_diagnostic.s2325.severity = none
 
 # VS Threading Rules
-dotnet_diagnostic.VSTHRD003.severity = none
+dotnet_diagnostic.vsthrd003.severity = none
 
-[*.cs]
 # Title    : Prefix local calls with this
 # Category : StyleCop.CSharp.ReadabilityRules
 # Help Link: https://github.com/DotNetAnalyzers/StyleCopAnalyzers/blob/master/documentation/SA1101.md
-dotnet_diagnostic.SA1101.severity = none
+dotnet_diagnostic.sa1101.severity = none
 
 # Title    : Statement should not be on a single line
 # Category : StyleCop.CSharp.LayoutRules
 # Help Link: https://github.com/DotNetAnalyzers/StyleCopAnalyzers/blob/master/documentation/SA1501.md
-dotnet_diagnostic.SA1501.severity = warning
+dotnet_diagnostic.sa1501.severity = warning
 
 # Title    : Element should not be on a single line
 # Category : StyleCop.CSharp.LayoutRules
 # Help Link: https://github.com/DotNetAnalyzers/StyleCopAnalyzers/blob/master/documentation/SA1502.md
-dotnet_diagnostic.SA1502.severity = none
+dotnet_diagnostic.sa1502.severity = none
 
 # Title    : Single-line comment should be preceded by blank line
 # Category : StyleCop.CSharp.LayoutRules
 # Help Link: https://github.com/DotNetAnalyzers/StyleCopAnalyzers/blob/master/documentation/SA1515.md
-dotnet_diagnostic.SA1515.severity = warning
+dotnet_diagnostic.sa1515.severity = warning
 
 # Title    : Elements should be separated by blank line
 # Category : StyleCop.CSharp.LayoutRules
 # Help Link: https://github.com/DotNetAnalyzers/StyleCopAnalyzers/blob/master/documentation/SA1516.md
-dotnet_diagnostic.SA1516.severity = none
+dotnet_diagnostic.sa1516.severity = none
 
 # Title    : Code should not contain blank lines at start of file
 # Category : StyleCop.CSharp.LayoutRules
 # Help Link: https://github.com/DotNetAnalyzers/StyleCopAnalyzers/blob/master/documentation/SA1517.md
-dotnet_diagnostic.SA1517.severity = warning
+dotnet_diagnostic.sa1517.severity = warning
 
 # Title    : Code should not contain blank lines at start of file
 # Category : StyleCop.CSharp.LayoutRules
 # Help Link: https://github.com/DotNetAnalyzers/StyleCopAnalyzers/blob/master/documentation/SA1517.md
-dotnet_diagnostic.SA1517.severity = warning
+dotnet_diagnostic.sa1517.severity = warning

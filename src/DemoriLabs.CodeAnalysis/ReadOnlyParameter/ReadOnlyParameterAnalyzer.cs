@@ -144,10 +144,8 @@ public sealed class ReadOnlyParameterAnalyzer : DiagnosticAnalyzer
         var symbol = context.SemanticModel.GetSymbolInfo(identifier, context.CancellationToken).Symbol;
 
         var parameter = ResolveParameter(symbol);
-        if (parameter is null)
-            return;
 
-        if (parameter.RefKind is not RefKind.None)
+        if (parameter?.RefKind is not RefKind.None)
             return;
 
         if (!AnnotationAttributes.HasReadOnlyAttribute(parameter))
