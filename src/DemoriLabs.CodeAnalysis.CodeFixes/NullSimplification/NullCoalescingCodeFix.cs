@@ -32,27 +32,28 @@ public sealed class NullCoalescingCodeFix : CodeFixProvider
         var diagnostic = context.Diagnostics[0];
         var token = root.FindToken(diagnostic.Location.SourceSpan.Start);
 
-        if (token.Parent is ConditionalExpressionSyntax conditional)
+        switch (token.Parent)
         {
-            context.RegisterCodeFix(
-                CodeAction.Create(
-                    "Use null-coalescing operator",
-                    ct => FixTernaryAsync(context.Document, conditional, ct),
-                    equivalenceKey: nameof(NullCoalescingCodeFix)
-                ),
-                diagnostic
-            );
-        }
-        else if (token.Parent is IfStatementSyntax ifStatement)
-        {
-            context.RegisterCodeFix(
-                CodeAction.Create(
-                    "Use null-coalescing operator",
-                    ct => FixIfStatementAsync(context.Document, ifStatement, ct),
-                    equivalenceKey: nameof(NullCoalescingCodeFix)
-                ),
-                diagnostic
-            );
+            case ConditionalExpressionSyntax conditional:
+                context.RegisterCodeFix(
+                    CodeAction.Create(
+                        "Use null-coalescing operator",
+                        ct => FixTernaryAsync(context.Document, conditional, ct),
+                        equivalenceKey: nameof(NullCoalescingCodeFix)
+                    ),
+                    diagnostic
+                );
+                break;
+            case IfStatementSyntax ifStatement:
+                context.RegisterCodeFix(
+                    CodeAction.Create(
+                        "Use null-coalescing operator",
+                        ct => FixIfStatementAsync(context.Document, ifStatement, ct),
+                        equivalenceKey: nameof(NullCoalescingCodeFix)
+                    ),
+                    diagnostic
+                );
+                break;
         }
     }
 
@@ -66,9 +67,8 @@ public sealed class NullCoalescingCodeFix : CodeFixProvider
         if (root is null)
             return document;
 
-        var nullCheck = GetNullCheckVariable(conditional.Condition);
-        var variableText = nullCheck.Variable.WithoutTrivia().ToFullString();
-        var isNotNull = nullCheck.IsNotNull;
+        var (variable, isNotNull) = GetNullCheckVariable(conditional.Condition);
+        var variableText = variable.WithoutTrivia().ToFullString();
 
         var fallbackExpr = isNotNull
             ? conditional.WhenFalse.WithoutTrivia().ToFullString()
@@ -141,7 +141,7 @@ public sealed class NullCoalescingCodeFix : CodeFixProvider
         return statement switch
         {
             ReturnStatementSyntax { Expression: { } expr } => expr,
-            BlockSyntax { Statements: { Count: 1 } } block
+            BlockSyntax { Statements.Count: 1 } block
                 when block.Statements[0] is ReturnStatementSyntax { Expression: { } expr } => expr,
             _ => throw new InvalidOperationException("Expected a single return statement."),
         };
@@ -155,23 +155,18 @@ public sealed class NullCoalescingCodeFix : CodeFixProvider
             {
                 if (binary.IsKind(SyntaxKind.NotEqualsExpression))
                 {
-                    if (IsNullLiteral(binary.Right))
-                        return (binary.Left, IsNotNull: true);
-                    return (binary.Right, IsNotNull: true);
+                    return IsNullLiteral(binary.Right)
+                        ? (binary.Left, IsNotNull: true)
+                        : (binary.Right, IsNotNull: true);
                 }
 
-                if (IsNullLiteral(binary.Right))
-                    return (binary.Left, IsNotNull: false);
-                return (binary.Right, IsNotNull: false);
+                return IsNullLiteral(binary.Right) ? (binary.Left, IsNotNull: false) : (binary.Right, IsNotNull: false);
             }
             case IsPatternExpressionSyntax isPattern:
             {
-                if (isPattern.Pattern is UnaryPatternSyntax { OperatorToken.RawKind: (int)SyntaxKind.NotKeyword })
-                {
-                    return (isPattern.Expression, IsNotNull: true);
-                }
-
-                return (isPattern.Expression, IsNotNull: false);
+                return isPattern.Pattern is UnaryPatternSyntax { OperatorToken.RawKind: (int)SyntaxKind.NotKeyword }
+                    ? (isPattern.Expression, IsNotNull: true)
+                    : (isPattern.Expression, IsNotNull: false);
             }
             default:
                 throw new InvalidOperationException("Expected a null check condition.");

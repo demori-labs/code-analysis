@@ -48,10 +48,7 @@ public sealed class NegationPatternCodeFix : CodeFixProvider
     private static async Task<Document> FixAsync(Document document, SyntaxNode node, CancellationToken ct)
     {
         var root = await document.GetSyntaxRootAsync(ct).ConfigureAwait(false);
-        if (root is null)
-            return document;
-
-        if (node is not PrefixUnaryExpressionSyntax prefixUnary)
+        if (root is null || node is not PrefixUnaryExpressionSyntax prefixUnary)
             return document;
 
         var operand = prefixUnary.Operand;

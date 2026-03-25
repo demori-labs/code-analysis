@@ -70,7 +70,7 @@ public sealed class NullCoalescingAssignmentCodeFix : CodeFixProvider
         return statement switch
         {
             ExpressionStatementSyntax { Expression: AssignmentExpressionSyntax assignment } => assignment,
-            BlockSyntax { Statements: { Count: 1 } } block
+            BlockSyntax { Statements.Count: 1 } block
                 when block.Statements[0]
                     is ExpressionStatementSyntax { Expression: AssignmentExpressionSyntax assignment } => assignment,
             _ => throw new InvalidOperationException("Expected a single assignment statement."),

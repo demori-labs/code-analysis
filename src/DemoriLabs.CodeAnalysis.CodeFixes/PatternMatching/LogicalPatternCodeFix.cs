@@ -48,10 +48,7 @@ public sealed class LogicalPatternCodeFix : CodeFixProvider
     private static async Task<Document> FixAsync(Document document, SyntaxNode node, CancellationToken ct)
     {
         var root = await document.GetSyntaxRootAsync(ct).ConfigureAwait(false);
-        if (root is null)
-            return document;
-
-        if (node is not BinaryExpressionSyntax binaryExpression)
+        if (root is null || node is not BinaryExpressionSyntax binaryExpression)
             return document;
 
         var isOr = binaryExpression.IsKind(SyntaxKind.LogicalOrExpression);
@@ -137,10 +134,15 @@ public sealed class LogicalPatternCodeFix : CodeFixProvider
         List<BinaryExpressionSyntax> leaves
     )
     {
-        if (expression.Left is BinaryExpressionSyntax leftBinary && leftBinary.Kind() == kind)
-            FlattenChain(leftBinary, kind, leaves);
-        else if (expression.Left is BinaryExpressionSyntax leftLeaf)
-            leaves.Add(leftLeaf);
+        switch (expression.Left)
+        {
+            case BinaryExpressionSyntax leftBinary when leftBinary.Kind() == kind:
+                FlattenChain(leftBinary, kind, leaves);
+                break;
+            case BinaryExpressionSyntax leftLeaf:
+                leaves.Add(leftLeaf);
+                break;
+        }
 
         if (expression.Right is BinaryExpressionSyntax rightLeaf)
             leaves.Add(rightLeaf);
@@ -164,20 +166,16 @@ public sealed class LogicalPatternCodeFix : CodeFixProvider
 
     private static bool IsLiteralOrConstant(ExpressionSyntax expr)
     {
-        if (expr is LiteralExpressionSyntax)
-            return true;
-
-        if (
-            expr is PrefixUnaryExpressionSyntax { RawKind: (int)SyntaxKind.UnaryMinusExpression } prefix
-            && prefix.Operand is LiteralExpressionSyntax
-        )
+        return expr switch
         {
-            return true;
-        }
-
-        if (expr is MemberAccessExpressionSyntax)
-            return true;
-
-        return false;
+            LiteralExpressionSyntax
+            or PrefixUnaryExpressionSyntax
+            {
+                RawKind: (int)SyntaxKind.UnaryMinusExpression,
+                Operand: LiteralExpressionSyntax,
+            }
+            or MemberAccessExpressionSyntax => true,
+            _ => false,
+        };
     }
 }

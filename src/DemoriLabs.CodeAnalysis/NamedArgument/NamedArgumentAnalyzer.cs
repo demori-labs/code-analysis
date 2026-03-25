@@ -133,7 +133,7 @@ public sealed class NamedArgumentAnalyzer : DiagnosticAnalyzer
             return false;
         }
 
-        var suffix = parameterName.Substring(argumentName.Length);
+        var suffix = parameterName[argumentName.Length..];
         var typeName = parameter.Type.Name;
         return string.Equals(suffix, typeName, StringComparison.OrdinalIgnoreCase);
     }

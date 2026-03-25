@@ -438,12 +438,9 @@ public sealed class InvertIfToReduceNestingCodeFix : CodeFixProvider
                     return toIndentTrivia;
                 }
 
-                if (text.StartsWith(fromIndent))
-                {
-                    return SyntaxFactory.Whitespace(toIndent + text.Substring(fromIndent.Length));
-                }
-
-                return original;
+                return text.StartsWith(fromIndent)
+                    ? SyntaxFactory.Whitespace(toIndent + text.Substring(fromIndent.Length))
+                    : original;
             }
         );
     }
@@ -495,7 +492,7 @@ public sealed class InvertIfToReduceNestingCodeFix : CodeFixProvider
         };
     }
 
-    private static StatementSyntax BuildBlockGuard(SyntaxList<StatementSyntax> statements, string indent)
+    private static BlockSyntax BuildBlockGuard(SyntaxList<StatementSyntax> statements, string indent)
     {
         var bodyIndent = indent + "    ";
         var indentTrivia = SyntaxFactory.Whitespace(bodyIndent);
@@ -723,10 +720,13 @@ public sealed class InvertIfToReduceNestingCodeFix : CodeFixProvider
 
     private static BinaryExpressionSyntax? NegateDeMorgan(BinaryExpressionSyntax binary)
     {
+        ExpressionSyntax? left;
+        ExpressionSyntax? right;
+
         if (binary.IsKind(SyntaxKind.LogicalAndExpression))
         {
-            var left = NegateExpression(binary.Left.WithoutTrivia());
-            var right = NegateExpression(binary.Right.WithoutTrivia());
+            left = NegateExpression(binary.Left.WithoutTrivia());
+            right = NegateExpression(binary.Right.WithoutTrivia());
 
             return SyntaxFactory.BinaryExpression(
                 SyntaxKind.LogicalOrExpression,
@@ -739,23 +739,21 @@ public sealed class InvertIfToReduceNestingCodeFix : CodeFixProvider
             );
         }
 
-        if (binary.IsKind(SyntaxKind.LogicalOrExpression))
-        {
-            var left = NegateExpression(binary.Left.WithoutTrivia());
-            var right = NegateExpression(binary.Right.WithoutTrivia());
+        if (binary.IsKind(SyntaxKind.LogicalOrExpression) is false)
+            return null;
 
-            return SyntaxFactory.BinaryExpression(
-                SyntaxKind.LogicalAndExpression,
-                MaybeParenthesizeForAnd(left),
-                SyntaxFactory
-                    .Token(SyntaxKind.AmpersandAmpersandToken)
-                    .WithLeadingTrivia(SyntaxFactory.Space)
-                    .WithTrailingTrivia(SyntaxFactory.Space),
-                MaybeParenthesizeForAnd(right)
-            );
-        }
+        left = NegateExpression(binary.Left.WithoutTrivia());
+        right = NegateExpression(binary.Right.WithoutTrivia());
 
-        return null;
+        return SyntaxFactory.BinaryExpression(
+            SyntaxKind.LogicalAndExpression,
+            MaybeParenthesizeForAnd(left),
+            SyntaxFactory
+                .Token(SyntaxKind.AmpersandAmpersandToken)
+                .WithLeadingTrivia(SyntaxFactory.Space)
+                .WithTrailingTrivia(SyntaxFactory.Space),
+            MaybeParenthesizeForAnd(right)
+        );
     }
 
     private static ExpressionSyntax MaybeParenthesizeForOr(ExpressionSyntax expression)
@@ -840,9 +838,8 @@ public sealed class InvertIfToReduceNestingCodeFix : CodeFixProvider
     {
         if (IsConstantLike(binary.Right))
             return (binary.Left.WithoutTrivia(), binary.Right.WithoutTrivia());
-        if (IsConstantLike(binary.Left))
-            return (binary.Right.WithoutTrivia(), binary.Left.WithoutTrivia());
-        return (null, null);
+
+        return IsConstantLike(binary.Left) ? (binary.Right.WithoutTrivia(), binary.Left.WithoutTrivia()) : (null, null);
     }
 
     private static bool HasMemberAccessComparisons(SyntaxNode node)
@@ -929,10 +926,15 @@ public sealed class InvertIfToReduceNestingCodeFix : CodeFixProvider
         // Do not rewrite comparisons inside lambda expressions — they may be
         // converted to expression trees (e.g. IQueryable), which do not support
         // pattern-matching 'is' expressions.
-        public override SyntaxNode? VisitSimpleLambdaExpression(SimpleLambdaExpressionSyntax node) => node;
+        public override SyntaxNode VisitSimpleLambdaExpression(SimpleLambdaExpressionSyntax node)
+        {
+            return node;
+        }
 
-        public override SyntaxNode? VisitParenthesizedLambdaExpression(ParenthesizedLambdaExpressionSyntax node) =>
-            node;
+        public override SyntaxNode VisitParenthesizedLambdaExpression(ParenthesizedLambdaExpressionSyntax node)
+        {
+            return node;
+        }
 
         private bool IsConstant(ExpressionSyntax expression)
         {
@@ -976,38 +978,31 @@ public sealed class InvertIfToReduceNestingCodeFix : CodeFixProvider
                 .WithLeadingTrivia(SyntaxFactory.Space)
                 .WithTrailingTrivia(SyntaxFactory.Space);
 
-            if (visited.Kind() is SyntaxKind.EqualsExpression)
+            if (visited.Kind() is not SyntaxKind.EqualsExpression)
             {
-                // For member access constants (enums), use BinaryExpression(IsExpression)
-                // with QualifiedName to match the parser's syntax tree output
-                if (
-                    constant
-                    is not MemberAccessExpressionSyntax { Expression: IdentifierNameSyntax typeName } memberAccess
-                )
-                {
-                    return SyntaxFactory.IsPatternExpression(
-                        target,
-                        isKeyword,
+                return SyntaxFactory.IsPatternExpression(
+                    target,
+                    isKeyword,
+                    SyntaxFactory.UnaryPattern(
+                        SyntaxFactory.Token(SyntaxKind.NotKeyword).WithTrailingTrivia(SyntaxFactory.Space),
                         SyntaxFactory.ConstantPattern(constant)
-                    );
-                }
-
-                var qualifiedName = SyntaxFactory.QualifiedName(
-                    typeName.WithoutTrivia(),
-                    memberAccess.Name.WithoutTrivia()
+                    )
                 );
-
-                return SyntaxFactory.BinaryExpression(SyntaxKind.IsExpression, target, isKeyword, qualifiedName);
             }
 
-            return SyntaxFactory.IsPatternExpression(
-                target,
-                isKeyword,
-                SyntaxFactory.UnaryPattern(
-                    SyntaxFactory.Token(SyntaxKind.NotKeyword).WithTrailingTrivia(SyntaxFactory.Space),
-                    SyntaxFactory.ConstantPattern(constant)
-                )
+            // For member access constants (enums), use BinaryExpression(IsExpression)
+            // with QualifiedName to match the parser's syntax tree output
+            if (constant is not MemberAccessExpressionSyntax { Expression: IdentifierNameSyntax typeName } memberAccess)
+            {
+                return SyntaxFactory.IsPatternExpression(target, isKeyword, SyntaxFactory.ConstantPattern(constant));
+            }
+
+            var qualifiedName = SyntaxFactory.QualifiedName(
+                typeName.WithoutTrivia(),
+                memberAccess.Name.WithoutTrivia()
             );
+
+            return SyntaxFactory.BinaryExpression(SyntaxKind.IsExpression, target, isKeyword, qualifiedName);
         }
     }
 

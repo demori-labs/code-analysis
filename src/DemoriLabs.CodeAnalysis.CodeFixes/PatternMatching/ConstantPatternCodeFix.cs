@@ -64,10 +64,7 @@ public sealed class ConstantPatternCodeFix : CodeFixProvider
             return document;
 
         var semanticModel = await document.GetSemanticModelAsync(ct).ConfigureAwait(false);
-        if (semanticModel is null)
-            return document;
-
-        if (node is not BinaryExpressionSyntax binaryExpression)
+        if (semanticModel is null || node is not BinaryExpressionSyntax binaryExpression)
             return document;
 
         var left = binaryExpression.Left;
@@ -103,18 +100,20 @@ public sealed class ConstantPatternCodeFix : CodeFixProvider
         if (expression.IsKind(SyntaxKind.NullLiteralExpression))
             return true;
 
-        if (expression is LiteralExpressionSyntax)
-            return true;
-
-        if (
-            expression is PrefixUnaryExpressionSyntax { RawKind: (int)SyntaxKind.UnaryMinusExpression } prefix
-            && prefix.Operand is LiteralExpressionSyntax
-        )
+        switch (expression)
         {
-            return true;
+            case LiteralExpressionSyntax:
+            case PrefixUnaryExpressionSyntax
+            {
+                RawKind: (int)SyntaxKind.UnaryMinusExpression,
+                Operand: LiteralExpressionSyntax
+            }:
+                return true;
+            default:
+            {
+                var constantValue = semanticModel.GetConstantValue(expression, ct);
+                return constantValue.HasValue;
+            }
         }
-
-        var constantValue = semanticModel.GetConstantValue(expression, ct);
-        return constantValue.HasValue;
     }
 }

@@ -51,14 +51,14 @@ public sealed class AsWithNullCheckCodeFix : CodeFixProvider
     private static async Task<Document> FixAsync(Document document, SyntaxNode node, CancellationToken ct)
     {
         var root = await document.GetSyntaxRootAsync(ct).ConfigureAwait(false);
-        if (root is null)
+        if (
+            root is null
+            || node is not BinaryExpressionSyntax { RawKind: (int)SyntaxKind.AsExpression } asExpression
+            || asExpression.Parent?.Parent?.Parent?.Parent is not LocalDeclarationStatementSyntax localDeclaration
+        )
+        {
             return document;
-
-        if (node is not BinaryExpressionSyntax { RawKind: (int)SyntaxKind.AsExpression } asExpression)
-            return document;
-
-        if (asExpression.Parent?.Parent?.Parent?.Parent is not LocalDeclarationStatementSyntax localDeclaration)
-            return document;
+        }
 
         var variable = localDeclaration.Declaration.Variables[0];
 
@@ -71,11 +71,13 @@ public sealed class AsWithNullCheckCodeFix : CodeFixProvider
 
         var statements = block.Statements;
         var declarationIndex = statements.IndexOf(localDeclaration);
-        if (declarationIndex + 1 >= statements.Count)
+        if (
+            declarationIndex + 1 >= statements.Count
+            || statements[declarationIndex + 1] is not IfStatementSyntax ifStatement
+        )
+        {
             return document;
-
-        if (statements[declarationIndex + 1] is not IfStatementSyntax ifStatement)
-            return document;
+        }
 
         var isGuardClause = IsPositiveNullCheck(ifStatement.Condition);
         var newConditionText = isGuardClause

@@ -42,6 +42,7 @@ public sealed class MultipleEnumerationCodeFix : CodeFixProvider
         var semanticModel = await context
             .Document.GetSemanticModelAsync(context.CancellationToken)
             .ConfigureAwait(false);
+
         if (semanticModel is null)
         {
             return;

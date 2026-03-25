@@ -48,10 +48,7 @@ public sealed class TypeCheckAndCastCodeFix : CodeFixProvider
     private static async Task<Document> FixAsync(Document document, SyntaxNode node, CancellationToken ct)
     {
         var root = await document.GetSyntaxRootAsync(ct).ConfigureAwait(false);
-        if (root is null)
-            return document;
-
-        if (node is not BinaryExpressionSyntax isExpression)
+        if (root is null || node is not BinaryExpressionSyntax isExpression)
             return document;
 
         var checkedExpression = isExpression.Left;
@@ -88,16 +85,14 @@ public sealed class TypeCheckAndCastCodeFix : CodeFixProvider
         );
 
         var updatedIsExpression = newRoot.FindNode(isExpression.Span);
-        if (updatedIsExpression is not null)
-        {
-            var replacementText = $"{checkedExpression.WithoutTrivia().ToFullString()} is {typeName} {varName}";
-            var replacementExpression = SyntaxFactory
-                .ParseExpression(replacementText)
-                .WithLeadingTrivia(updatedIsExpression.GetLeadingTrivia())
-                .WithTrailingTrivia(updatedIsExpression.GetTrailingTrivia());
 
-            newRoot = newRoot.ReplaceNode(updatedIsExpression, replacementExpression);
-        }
+        var replacementText = $"{checkedExpression.WithoutTrivia().ToFullString()} is {typeName} {varName}";
+        var replacementExpression = SyntaxFactory
+            .ParseExpression(replacementText)
+            .WithLeadingTrivia(updatedIsExpression.GetLeadingTrivia())
+            .WithTrailingTrivia(updatedIsExpression.GetTrailingTrivia());
+
+        newRoot = newRoot.ReplaceNode(updatedIsExpression, replacementExpression);
 
         return document.WithSyntaxRoot(newRoot);
     }

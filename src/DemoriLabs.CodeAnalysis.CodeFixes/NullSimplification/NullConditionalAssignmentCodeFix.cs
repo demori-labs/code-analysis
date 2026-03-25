@@ -70,7 +70,7 @@ public sealed class NullConditionalAssignmentCodeFix : CodeFixProvider
         return statement switch
         {
             ExpressionStatementSyntax expressionStatement => expressionStatement,
-            BlockSyntax { Statements: { Count: 1 } } block
+            BlockSyntax { Statements.Count: 1 } block
                 when block.Statements[0] is ExpressionStatementSyntax expressionStatement => expressionStatement,
             _ => throw new InvalidOperationException("Expected a single expression statement."),
         };
