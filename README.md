@@ -19,6 +19,19 @@ Roslyn analyzers and code fixes for C#, designed to enforce design patterns, cat
 | [DL2003](docs/analyzers/DL2003.md)        | Primary constructor parameter should be `[ReadOnly]` |
 | [DL3001](docs/analyzers/DL3001.md)        | Use named arguments                                  |
 | [DL3002](docs/analyzers/DL3002.md)        | Invert `if` statement to reduce nesting              |
+| [DL3003](docs/analyzers/DL3003.md)        | Use constant pattern instead of equality operator    |
+| [DL3004](docs/analyzers/DL3004.md)        | Use `is false` / `is not` instead of `!`             |
+| [DL3005](docs/analyzers/DL3005.md)        | Use logical pattern for combined comparisons         |
+| [DL3006](docs/analyzers/DL3006.md)        | Use declaration pattern instead of type check + cast |
+| [DL3007](docs/analyzers/DL3007.md)        | Use declaration pattern instead of `as` + null check |
+| [DL3008](docs/analyzers/DL3008.md)        | Simplify boolean return                              |
+| [DL3009](docs/analyzers/DL3009.md)        | Simplify boolean assignment                          |
+| [DL3010](docs/analyzers/DL3010.md)        | Simplify conditional return to ternary               |
+| [DL3011](docs/analyzers/DL3011.md)        | Simplify conditional assignment to ternary           |
+| [DL3012](docs/analyzers/DL3012.md)        | Merge nested `if` statements                         |
+| [DL3013](docs/analyzers/DL3013.md)        | Use null-coalescing operator (`??`)                  |
+| [DL3014](docs/analyzers/DL3014.md)        | Use null-coalescing assignment (`??=`)               |
+| [DL3015](docs/analyzers/DL3015.md)        | Use null-conditional assignment (`?.`)               |
 | [DL4001](docs/analyzers/DL4001-DL4002.md) | Cognitive complexity is moderate                     |
 | [DL4002](docs/analyzers/DL4001-DL4002.md) | Cognitive complexity is elevated                     |
 | [DL5001](docs/analyzers/DL5001.md)        | Possible multiple enumeration                        |

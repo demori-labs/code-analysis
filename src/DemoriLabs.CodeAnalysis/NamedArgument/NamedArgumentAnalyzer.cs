@@ -1,5 +1,4 @@
 using System.Collections.Immutable;
-using System.Threading;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
@@ -89,20 +88,20 @@ public sealed class NamedArgumentAnalyzer : DiagnosticAnalyzer
         }
 
         // Rule 2: Methods exceeding the threshold require naming for non-matching arguments
-        if (parameter.ContainingSymbol is IMethodSymbol method)
+        if (parameter.ContainingSymbol is not IMethodSymbol method)
+            return;
+
+        var visibleParameterCount = CountVisibleParameters(method);
+
+        var namedArgumentsThreshold = GetNamedArgumentsThreshold(context);
+
+        if (visibleParameterCount <= namedArgumentsThreshold)
+            return;
+
+        var argumentName = GetArgumentName(argument.Expression);
+        if (argumentName is null || !NameMatches(argumentName, parameter))
         {
-            var visibleParameterCount = CountVisibleParameters(method);
-
-            var namedArgumentsThreshold = GetNamedArgumentsThreshold(context);
-
-            if (visibleParameterCount > namedArgumentsThreshold)
-            {
-                var argumentName = GetArgumentName(argument.Expression);
-                if (argumentName is null || !NameMatches(argumentName, parameter))
-                {
-                    context.ReportDiagnostic(Diagnostic.Create(Rule, argument.GetLocation(), parameter.Name));
-                }
-            }
+            context.ReportDiagnostic(Diagnostic.Create(Rule, argument.GetLocation(), parameter.Name));
         }
     }
 
@@ -126,17 +125,17 @@ public sealed class NamedArgumentAnalyzer : DiagnosticAnalyzer
             return true;
 
         if (
-            parameterName.StartsWith(argumentName, StringComparison.OrdinalIgnoreCase)
-            && parameterName.Length > argumentName.Length
-            && char.IsUpper(parameterName[argumentName.Length])
+            !parameterName.StartsWith(argumentName, StringComparison.OrdinalIgnoreCase)
+            || parameterName.Length <= argumentName.Length
+            || !char.IsUpper(parameterName[argumentName.Length])
         )
         {
-            var suffix = parameterName.Substring(argumentName.Length);
-            var typeName = parameter.Type.Name;
-            return string.Equals(suffix, typeName, StringComparison.OrdinalIgnoreCase);
+            return false;
         }
 
-        return false;
+        var suffix = parameterName.Substring(argumentName.Length);
+        var typeName = parameter.Type.Name;
+        return string.Equals(suffix, typeName, StringComparison.OrdinalIgnoreCase);
     }
 
     private static int CountVisibleParameters(IMethodSymbol method)

@@ -284,15 +284,15 @@ public sealed class DataClassCouldBeRecordCodeFix : CodeFixProvider
                 .Cast<ObjectCreationExpressionSyntax>()
                 .ToList();
 
-            if (creationsToRewrite.Count > 0)
-            {
-                var rewrittenRoot = targetRoot.ReplaceNodes(
-                    creationsToRewrite,
-                    (original, _) =>
-                        RewriteCallSite(original, parameterNames).WithAdditionalAnnotations(Formatter.Annotation)
-                );
-                currentSolution = currentSolution.WithDocumentSyntaxRoot(kvp.Key, rewrittenRoot);
-            }
+            if (creationsToRewrite.Count <= 0)
+                continue;
+
+            var rewrittenRoot = targetRoot.ReplaceNodes(
+                creationsToRewrite,
+                (original, _) =>
+                    RewriteCallSite(original, parameterNames).WithAdditionalAnnotations(Formatter.Annotation)
+            );
+            currentSolution = currentSolution.WithDocumentSyntaxRoot(kvp.Key, rewrittenRoot);
         }
 
         return currentSolution;
@@ -352,8 +352,8 @@ public sealed class DataClassCouldBeRecordCodeFix : CodeFixProvider
                     {
                         Expression: AssignmentExpressionSyntax
                         {
-                            RawKind: (int)SyntaxKind.SimpleAssignmentExpression
-                        } assignment
+                            RawKind: (int)SyntaxKind.SimpleAssignmentExpression,
+                        } assignment,
                     }
                 )
                 {
@@ -364,7 +364,7 @@ public sealed class DataClassCouldBeRecordCodeFix : CodeFixProvider
         else if (
             constructor.ExpressionBody?.Expression is AssignmentExpressionSyntax
             {
-                RawKind: (int)SyntaxKind.SimpleAssignmentExpression
+                RawKind: (int)SyntaxKind.SimpleAssignmentExpression,
             } exprAssignment
         )
         {
@@ -462,17 +462,17 @@ public sealed class DataClassCouldBeRecordCodeFix : CodeFixProvider
         }
 
         // Get-only property — add init accessor
-        if (needsInit)
-        {
-            var lastAccessor = newAccessors[newAccessors.Count - 1];
-            newAccessors.Add(
-                SyntaxFactory
-                    .AccessorDeclaration(SyntaxKind.InitAccessorDeclaration)
-                    .WithSemicolonToken(SyntaxFactory.Token(SyntaxKind.SemicolonToken))
-                    .WithLeadingTrivia(lastAccessor.GetLeadingTrivia())
-                    .WithTrailingTrivia(lastAccessor.GetTrailingTrivia())
-            );
-        }
+        if (!needsInit)
+            return property.WithAccessorList(property.AccessorList.WithAccessors(SyntaxFactory.List(newAccessors)));
+
+        var lastAccessor = newAccessors[newAccessors.Count - 1];
+        newAccessors.Add(
+            SyntaxFactory
+                .AccessorDeclaration(SyntaxKind.InitAccessorDeclaration)
+                .WithSemicolonToken(SyntaxFactory.Token(SyntaxKind.SemicolonToken))
+                .WithLeadingTrivia(lastAccessor.GetLeadingTrivia())
+                .WithTrailingTrivia(lastAccessor.GetTrailingTrivia())
+        );
 
         return property.WithAccessorList(property.AccessorList.WithAccessors(SyntaxFactory.List(newAccessors)));
     }
@@ -532,7 +532,10 @@ public sealed class DataClassCouldBeRecordCodeFix : CodeFixProvider
         return newProperty;
     }
 
-    private static ExpressionSyntax RewriteCallSite(ObjectCreationExpressionSyntax creation, List<string> propertyNames)
+    private static ObjectCreationExpressionSyntax RewriteCallSite(
+        ObjectCreationExpressionSyntax creation,
+        List<string> propertyNames
+    )
     {
         if (creation.ArgumentList is null)
             return creation;
@@ -578,16 +581,16 @@ public sealed class DataClassCouldBeRecordCodeFix : CodeFixProvider
     {
         var newProperty = EnsureGetInit(property).WithInitializer(null).WithSemicolonToken(default);
 
-        if (property.Modifiers.Any(m => m.IsKind(SyntaxKind.RequiredKeyword)) is false)
-        {
-            var requiredToken = SyntaxFactory.Token(SyntaxKind.RequiredKeyword).WithTrailingTrivia(SyntaxFactory.Space);
+        if (property.Modifiers.Any(m => m.IsKind(SyntaxKind.RequiredKeyword)) is true)
+            return newProperty;
 
-            var publicIndex = newProperty.Modifiers.IndexOf(SyntaxKind.PublicKeyword);
-            newProperty =
-                publicIndex >= 0
-                    ? newProperty.WithModifiers(newProperty.Modifiers.Insert(publicIndex + 1, requiredToken))
-                    : newProperty.AddModifiers(requiredToken);
-        }
+        var requiredToken = SyntaxFactory.Token(SyntaxKind.RequiredKeyword).WithTrailingTrivia(SyntaxFactory.Space);
+
+        var publicIndex = newProperty.Modifiers.IndexOf(SyntaxKind.PublicKeyword);
+        newProperty =
+            publicIndex >= 0
+                ? newProperty.WithModifiers(newProperty.Modifiers.Insert(publicIndex + 1, requiredToken))
+                : newProperty.AddModifiers(requiredToken);
 
         return newProperty;
     }
@@ -602,7 +605,7 @@ public sealed class DataClassCouldBeRecordCodeFix : CodeFixProvider
                     is PredefinedTypeSyntax { Keyword.RawKind: (int)SyntaxKind.ObjectKeyword }
                         or NullableTypeSyntax
                         {
-                            ElementType: PredefinedTypeSyntax { Keyword.RawKind: (int)SyntaxKind.ObjectKeyword }
+                            ElementType: PredefinedTypeSyntax { Keyword.RawKind: (int)SyntaxKind.ObjectKeyword },
                         },
             // operator == and operator !=
             OperatorDeclarationSyntax op => op.OperatorToken.Kind()

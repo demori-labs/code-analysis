@@ -109,11 +109,12 @@ public sealed class DataClassCouldBeRecordAnalyzer : DiagnosticAnalyzer
 
             foreach (var member in iface.GetMembers())
             {
-                if (member is IMethodSymbol { MethodKind: MethodKind.Ordinary })
-                    return true;
-
-                if (member is IPropertySymbol { SetMethod: { IsInitOnly: false } })
-                    return true;
+                switch (member)
+                {
+                    case IMethodSymbol { MethodKind: MethodKind.Ordinary }:
+                    case IPropertySymbol { SetMethod.IsInitOnly: false }:
+                        return true;
+                }
             }
         }
 
@@ -122,19 +123,14 @@ public sealed class DataClassCouldBeRecordAnalyzer : DiagnosticAnalyzer
 
     private static bool IsBehaviourMethod(IMethodSymbol method)
     {
-        if (method.MethodKind is MethodKind.Conversion or MethodKind.Destructor)
-            return true;
-
-        if (method.MethodKind is MethodKind.UserDefinedOperator)
-            return IsRecordSynthesisableOperator(method) is false;
-
-        if (method.MethodKind is not MethodKind.Ordinary)
-            return false;
-
-        if (method.IsStatic)
-            return false;
-
-        return IsRecordSynthesisableMethod(method) is false;
+        return method.MethodKind switch
+        {
+            MethodKind.Conversion or MethodKind.Destructor => true,
+            MethodKind.UserDefinedOperator => IsRecordSynthesisableOperator(method) is false,
+            MethodKind.Ordinary when method.IsStatic => false,
+            MethodKind.Ordinary => IsRecordSynthesisableMethod(method) is false,
+            _ => false,
+        };
     }
 
     private static bool IsRecordSynthesisableMethod(IMethodSymbol method)

@@ -257,8 +257,8 @@ public sealed class UsePrimaryConstructorCodeFix : CodeFixProvider
                     {
                         Expression: AssignmentExpressionSyntax
                         {
-                            RawKind: (int)SyntaxKind.SimpleAssignmentExpression
-                        } assignment
+                            RawKind: (int)SyntaxKind.SimpleAssignmentExpression,
+                        } assignment,
                     }
                 )
                 {
@@ -269,7 +269,7 @@ public sealed class UsePrimaryConstructorCodeFix : CodeFixProvider
         else if (
             constructorDecl.ExpressionBody?.Expression is AssignmentExpressionSyntax
             {
-                RawKind: (int)SyntaxKind.SimpleAssignmentExpression
+                RawKind: (int)SyntaxKind.SimpleAssignmentExpression,
             } exprAssignment
         )
         {

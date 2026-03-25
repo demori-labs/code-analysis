@@ -145,13 +145,13 @@ public sealed class RecordPrimaryConstructorTooManyParametersCodeFix : CodeFixPr
                 var creationsToRewrite = new List<ObjectCreationExpressionSyntax>();
                 foreach (var oldNode in sameDocCallSites)
                 {
-                    if (oldNode is ObjectCreationExpressionSyntax creation)
-                    {
-                        var nodeInCurrent = currentRoot.FindNode(creation.Span);
-                        var creationInCurrent = nodeInCurrent.FirstAncestorOrSelf<ObjectCreationExpressionSyntax>();
-                        if (creationInCurrent?.ArgumentList is { Arguments.Count: > 0 })
-                            creationsToRewrite.Add(creationInCurrent);
-                    }
+                    if (oldNode is not ObjectCreationExpressionSyntax creation)
+                        continue;
+
+                    var nodeInCurrent = currentRoot.FindNode(creation.Span);
+                    var creationInCurrent = nodeInCurrent.FirstAncestorOrSelf<ObjectCreationExpressionSyntax>();
+                    if (creationInCurrent?.ArgumentList is { Arguments.Count: > 0 })
+                        creationsToRewrite.Add(creationInCurrent);
                 }
 
                 if (creationsToRewrite.Count > 0)
@@ -184,14 +184,14 @@ public sealed class RecordPrimaryConstructorTooManyParametersCodeFix : CodeFixPr
                 .Cast<ObjectCreationExpressionSyntax>()
                 .ToList();
 
-            if (creationsToRewrite.Count > 0)
-            {
-                var newRoot = otherRoot.ReplaceNodes(
-                    creationsToRewrite,
-                    (original, _) => RewriteCallSite(original, parameterNames, parameterToPropertyMap)
-                );
-                currentSolution = currentSolution.WithDocumentSyntaxRoot(kvp.Key, newRoot);
-            }
+            if (creationsToRewrite.Count <= 0)
+                continue;
+
+            var newRoot = otherRoot.ReplaceNodes(
+                creationsToRewrite,
+                (original, _) => RewriteCallSite(original, parameterNames, parameterToPropertyMap)
+            );
+            currentSolution = currentSolution.WithDocumentSyntaxRoot(kvp.Key, newRoot);
         }
 
         // Now apply the record declaration transformation
@@ -242,7 +242,7 @@ public sealed class RecordPrimaryConstructorTooManyParametersCodeFix : CodeFixPr
         return null;
     }
 
-    private static ExpressionSyntax RewriteCallSite(
+    private static ObjectCreationExpressionSyntax RewriteCallSite(
         ObjectCreationExpressionSyntax creation,
         List<string> parameterNames,
         Dictionary<string, string> parameterToPropertyMap

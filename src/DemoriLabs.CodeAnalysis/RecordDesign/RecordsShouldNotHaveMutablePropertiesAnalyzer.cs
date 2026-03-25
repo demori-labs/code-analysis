@@ -36,7 +36,7 @@ public sealed class RecordsShouldNotHaveMutablePropertiesAnalyzer : DiagnosticAn
             foreach (var member in iface.GetMembers(property.Name))
             {
                 if (
-                    member is IPropertySymbol { SetMethod: { IsInitOnly: false } } ifaceProp
+                    member is IPropertySymbol { SetMethod.IsInitOnly: false } ifaceProp
                     && SymbolEqualityComparer.Default.Equals(
                         containingType.FindImplementationForInterfaceMember(ifaceProp),
                         property

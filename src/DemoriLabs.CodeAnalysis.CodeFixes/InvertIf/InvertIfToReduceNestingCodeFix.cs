@@ -677,7 +677,7 @@ public sealed class InvertIfToReduceNestingCodeFix : CodeFixProvider
                 Pattern: ConstantPatternSyntax
                     or TypePatternSyntax
                     or DeclarationPatternSyntax
-                    or RecursivePatternSyntax
+                    or RecursivePatternSyntax,
             } isExpr:
             {
                 var notPattern = SyntaxFactory.UnaryPattern(
