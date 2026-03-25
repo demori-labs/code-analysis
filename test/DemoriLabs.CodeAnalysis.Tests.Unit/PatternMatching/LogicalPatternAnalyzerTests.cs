@@ -1,0 +1,296 @@
+using System.Diagnostics.CodeAnalysis;
+using DemoriLabs.CodeAnalysis.PatternMatching;
+using Microsoft.CodeAnalysis.CSharp.Testing;
+using Microsoft.CodeAnalysis.Testing;
+
+namespace DemoriLabs.CodeAnalysis.Tests.Unit.PatternMatching;
+
+// ReSharper disable MemberCanBeMadeStatic.Global
+public class LogicalPatternAnalyzerTests
+{
+    private static CSharpAnalyzerTest<LogicalPatternAnalyzer, DefaultVerifier> CreateTest(
+        [StringSyntax("C#")] string source
+    )
+    {
+        return new CSharpAnalyzerTest<LogicalPatternAnalyzer, DefaultVerifier>
+        {
+            TestCode = source,
+            ReferenceAssemblies = ReferenceAssemblies.Net.Net100,
+        };
+    }
+
+    [Test]
+    public async Task TwoEqualsOrChain_ReportsDiagnostic()
+    {
+        var test = CreateTest(
+            """
+            public class C
+            {
+                public void M(int x)
+                {
+                    if ({|DL3005:x == 1 || x == 2|}) { }
+                }
+            }
+            """
+        );
+
+        await test.RunAsync();
+    }
+
+    [Test]
+    public async Task ThreeEqualsOrChain_ReportsDiagnostic()
+    {
+        var test = CreateTest(
+            """
+            public class C
+            {
+                public void M(int x)
+                {
+                    if ({|DL3005:x == 1 || x == 2 || x == 3|}) { }
+                }
+            }
+            """
+        );
+
+        await test.RunAsync();
+    }
+
+    [Test]
+    public async Task StringEqualsOrChain_NoDiagnostic()
+    {
+        var test = CreateTest(
+            """
+            public class C
+            {
+                public void M(string s)
+                {
+                    if (s == "a" || s == "b") { }
+                }
+            }
+            """
+        );
+
+        await test.RunAsync();
+    }
+
+    [Test]
+    public async Task RangeCheck_ReportsDiagnostic()
+    {
+        var test = CreateTest(
+            """
+            public class C
+            {
+                public void M(int x)
+                {
+                    if ({|DL3005:x >= 0 && x < 100|}) { }
+                }
+            }
+            """
+        );
+
+        await test.RunAsync();
+    }
+
+    [Test]
+    public async Task RangeCheckExclusive_ReportsDiagnostic()
+    {
+        var test = CreateTest(
+            """
+            public class C
+            {
+                public void M(int x)
+                {
+                    if ({|DL3005:x > 0 && x <= 50|}) { }
+                }
+            }
+            """
+        );
+
+        await test.RunAsync();
+    }
+
+    [Test]
+    public async Task NotEqualsAndChain_ReportsDiagnostic()
+    {
+        var test = CreateTest(
+            """
+            public class C
+            {
+                public void M(int x)
+                {
+                    if ({|DL3005:x != 1 && x != 2|}) { }
+                }
+            }
+            """
+        );
+
+        await test.RunAsync();
+    }
+
+    [Test]
+    public async Task DifferentVariables_NoDiagnostic()
+    {
+        var test = CreateTest(
+            """
+            public class C
+            {
+                public void M(int x, int y)
+                {
+                    if (x == 1 || y == 2) { }
+                }
+            }
+            """
+        );
+
+        await test.RunAsync();
+    }
+
+    [Test]
+    public async Task NonConstantRightSide_NoDiagnostic()
+    {
+        var test = CreateTest(
+            """
+            public class C
+            {
+                public void M(int x, int y, int z)
+                {
+                    if (x == y || x == z) { }
+                }
+            }
+            """
+        );
+
+        await test.RunAsync();
+    }
+
+    [Test]
+    public async Task MixedOperators_NoDiagnostic()
+    {
+        var test = CreateTest(
+            """
+            public class C
+            {
+                public void M(int x)
+                {
+                    if (x == 1 || x > 10) { }
+                }
+            }
+            """
+        );
+
+        await test.RunAsync();
+    }
+
+    [Test]
+    public async Task SingleComparison_NoDiagnostic()
+    {
+        var test = CreateTest(
+            """
+            public class C
+            {
+                public void M(int x)
+                {
+                    if (x == 1) { }
+                }
+            }
+            """
+        );
+
+        await test.RunAsync();
+    }
+
+    [Test]
+    public async Task InsideExpressionTree_NoDiagnostic()
+    {
+        var test = CreateTest(
+            """
+            using System;
+            using System.Linq;
+            using System.Linq.Expressions;
+
+            public class C
+            {
+                public void M(IQueryable<int> q)
+                {
+                    q.Where(x => x == 1 || x == 2);
+                }
+            }
+            """
+        );
+
+        await test.RunAsync();
+    }
+
+    [Test]
+    public async Task AlreadyUsingPatternMatching_NoDiagnostic()
+    {
+        var test = CreateTest(
+            """
+            public class C
+            {
+                public void M(int x)
+                {
+                    if (x is 1 or 2 or 3) { }
+                }
+            }
+            """
+        );
+
+        await test.RunAsync();
+    }
+
+    [Test]
+    public async Task MixedAndWithNonRelational_NoDiagnostic()
+    {
+        var test = CreateTest(
+            """
+            public class C
+            {
+                public void M(int x, bool flag)
+                {
+                    if (x > 0 && flag) { }
+                }
+            }
+            """
+        );
+
+        await test.RunAsync();
+    }
+
+    [Test]
+    public async Task ThreeRelationalAnd_NoDiagnostic()
+    {
+        var test = CreateTest(
+            """
+            public class C
+            {
+                public void M(int x)
+                {
+                    if (x >= 0 && x < 100 && x != 50) { }
+                }
+            }
+            """
+        );
+
+        await test.RunAsync();
+    }
+
+    [Test]
+    public async Task MultipleDiagnosticsInSameMethod()
+    {
+        var test = CreateTest(
+            """
+            public class C
+            {
+                public void M(int x, int y)
+                {
+                    if ({|DL3005:x == 1 || x == 2|}) { }
+                    if ({|DL3005:y >= 0 && y < 100|}) { }
+                }
+            }
+            """
+        );
+
+        await test.RunAsync();
+    }
+}
