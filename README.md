@@ -17,6 +17,7 @@ Roslyn analyzers and code fixes for C#, designed to enforce design patterns, cat
 | [DL2001](docs/analyzers/DL2001-DL2002.md) | Parameter must not be reassigned                     |
 | [DL2002](docs/analyzers/DL2001-DL2002.md) | `[ReadOnly]` is incompatible with parameter modifier |
 | [DL2003](docs/analyzers/DL2003.md)        | Primary constructor parameter should be `[ReadOnly]` |
+| [DL2005](docs/analyzers/DL2005.md)        | Parameter is never used in method body               |
 | [DL3001](docs/analyzers/DL3001.md)        | Use named arguments                                  |
 | [DL3002](docs/analyzers/DL3002.md)        | Invert `if` statement to reduce nesting              |
 | [DL3003](docs/analyzers/DL3003.md)        | Use constant pattern instead of equality operator    |
