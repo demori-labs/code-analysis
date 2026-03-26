@@ -32,6 +32,7 @@ Roslyn analyzers and code fixes for C#, designed to enforce design patterns, cat
 | [DL3013](docs/analyzers/DL3013.md)        | Use null-coalescing operator (`??`)                  |
 | [DL3014](docs/analyzers/DL3014.md)        | Use null-coalescing assignment (`??=`)               |
 | [DL3015](docs/analyzers/DL3015.md)        | Use null-conditional assignment (`?.`)               |
+| [DL3016](docs/analyzers/DL3016.md)        | Redundant type pattern                               |
 | [DL4001](docs/analyzers/DL4001-DL4002.md) | Cognitive complexity is moderate                     |
 | [DL4002](docs/analyzers/DL4001-DL4002.md) | Cognitive complexity is elevated                     |
 | [DL5001](docs/analyzers/DL5001.md)        | Possible multiple enumeration                        |

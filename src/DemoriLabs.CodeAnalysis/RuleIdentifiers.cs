@@ -31,6 +31,7 @@ internal static class RuleIdentifiers
     public const string UseNullCoalescing = "DL3013";
     public const string UseNullCoalescingAssignment = "DL3014";
     public const string UseNullConditionalAssignment = "DL3015";
+    public const string RedundantTypePattern = "DL3016";
 
     // DL4xxx — Complexity
     public const string MethodHasModerateCognitiveComplexity = "DL4001";

@@ -32,3 +32,4 @@ DL3013 | Style | Warning | NullCoalescingAnalyzer
 DL3014 | Style | Warning | NullCoalescingAssignmentAnalyzer
 DL3015 | Style | Warning | NullConditionalAssignmentAnalyzer
 DL5001 | Performance | Warning | MultipleEnumerationAnalyzer
+DL3016 | Style | Warning | RedundantTypePatternAnalyzer
