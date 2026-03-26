@@ -5,6 +5,6 @@ namespace DemoriLabs.CodeAnalysis.Attributes;
 /// <summary>
 /// Suppresses the multiple enumeration diagnostic (<c>DL5001</c>) for the annotated parameter.
 /// </summary>
-[Conditional("DEMORILABS_DIAGNOSTICS_ATTRIBUTES")]
+[Conditional("DEMORILABS_CODE_ANALYSIS")]
 [AttributeUsage(AttributeTargets.Parameter)]
 public sealed class SuppressMultipleEnumerationAttribute : Attribute;
