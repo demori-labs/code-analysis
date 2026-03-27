@@ -156,4 +156,166 @@ public class NegationPatternCodeFixTests
 
         await test.RunAsync();
     }
+
+    [Test]
+    public async Task NegatedEqualsNull_FixesToIsFalse()
+    {
+        var test = CreateTest(
+            """
+            public class C
+            {
+                public void M(object? o)
+                {
+                    if ({|DL3004:!(o == null)|}) { }
+                }
+            }
+            """,
+            """
+            public class C
+            {
+                public void M(object? o)
+                {
+                    if (o is not null) { }
+                }
+            }
+            """
+        );
+
+        await test.RunAsync();
+    }
+
+    [Test]
+    public async Task NegatedNotEqualsNull_FixesToIsNull()
+    {
+        var test = CreateTest(
+            """
+            public class C
+            {
+                public void M(object? o)
+                {
+                    if ({|DL3004:!(o != null)|}) { }
+                }
+            }
+            """,
+            """
+            public class C
+            {
+                public void M(object? o)
+                {
+                    if (o is null) { }
+                }
+            }
+            """
+        );
+
+        await test.RunAsync();
+    }
+
+    [Test]
+    public async Task NegatedHasValue_FixesToIsFalse()
+    {
+        var test = CreateTest(
+            """
+            public class C
+            {
+                public void M(int? id)
+                {
+                    if ({|DL3004:!id.HasValue|}) { }
+                }
+            }
+            """,
+            """
+            public class C
+            {
+                public void M(int? id)
+                {
+                    if (id is null) { }
+                }
+            }
+            """
+        );
+
+        await test.RunAsync();
+    }
+
+    [Test]
+    public async Task NegatedIsNotNull_FixesToIsNull()
+    {
+        var test = CreateTest(
+            """
+            public class C
+            {
+                public void M(object? o)
+                {
+                    if ({|DL3004:!(o is not null)|}) { }
+                }
+            }
+            """,
+            """
+            public class C
+            {
+                public void M(object? o)
+                {
+                    if (o is null) { }
+                }
+            }
+            """
+        );
+
+        await test.RunAsync();
+    }
+
+    [Test]
+    public async Task NegatedIsNotString_FixesToIsString()
+    {
+        var test = CreateTest(
+            """
+            public class C
+            {
+                public void M(object o)
+                {
+                    if ({|DL3004:!(o is not string)|}) { }
+                }
+            }
+            """,
+            """
+            public class C
+            {
+                public void M(object o)
+                {
+                    if (o is string) { }
+                }
+            }
+            """
+        );
+
+        await test.RunAsync();
+    }
+
+    [Test]
+    public async Task ValueType_NegatedEqualsNull_FixesToIsNotNull()
+    {
+        var test = CreateTest(
+            """
+            public class C
+            {
+                public void M(int? id)
+                {
+                    if ({|DL3004:!(id == null)|}) { }
+                }
+            }
+            """,
+            """
+            public class C
+            {
+                public void M(int? id)
+                {
+                    if (id is not null) { }
+                }
+            }
+            """
+        );
+
+        await test.RunAsync();
+    }
 }

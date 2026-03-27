@@ -45,6 +45,24 @@ public sealed class NegationPatternAnalyzer : DiagnosticAnalyzer
     private static void AnalyzeLogicalNot(SyntaxNodeAnalysisContext context, INamedTypeSymbol? expressionType)
     {
         var prefixUnary = (PrefixUnaryExpressionSyntax)context.Node;
+
+        if (
+            LogicalPatternAnalyzer.IsLeafOfLogicalPatternChain(
+                prefixUnary,
+                context.SemanticModel,
+                context.CancellationToken
+            )
+        )
+        {
+            return;
+        }
+
+        // Skip when inside an is-pattern: !(x) is true/false — DL3003 handles this
+        if (IsInsideIsTrueFalsePattern(prefixUnary))
+        {
+            return;
+        }
+
         var operand = prefixUnary.Operand;
 
         var unwrapped = operand;
@@ -99,6 +117,32 @@ public sealed class NegationPatternAnalyzer : DiagnosticAnalyzer
         context.ReportDiagnostic(
             Diagnostic.Create(Rule, prefixUnary.GetLocation(), suggestionText, prefixUnary.ToString())
         );
+    }
+
+    private static bool IsInsideIsTrueFalsePattern(PrefixUnaryExpressionSyntax node)
+    {
+        SyntaxNode? current = node.Parent;
+        while (current is ParenthesizedExpressionSyntax)
+            current = current.Parent;
+
+        return current
+            is IsPatternExpressionSyntax
+            {
+                Pattern: ConstantPatternSyntax
+                    {
+                        Expression.RawKind: (int)SyntaxKind.TrueLiteralExpression
+                            or (int)SyntaxKind.FalseLiteralExpression
+                    }
+                    or UnaryPatternSyntax
+                    {
+                        RawKind: (int)SyntaxKind.NotPattern,
+                        Pattern: ConstantPatternSyntax
+                        {
+                            Expression.RawKind: (int)SyntaxKind.TrueLiteralExpression
+                                or (int)SyntaxKind.FalseLiteralExpression
+                        }
+                    }
+            };
     }
 
     private static string BuildIsNotSuggestion(ExpressionSyntax unwrapped)

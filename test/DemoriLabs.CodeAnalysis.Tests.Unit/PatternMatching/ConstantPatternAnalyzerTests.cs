@@ -28,7 +28,7 @@ public class ConstantPatternAnalyzerTests
             {
                 public void M(object? o)
                 {
-                    if (o {|DL3003:== null|}) { }
+                    if ({|DL3003:o == null|}) { }
                 }
             }
             """
@@ -46,7 +46,7 @@ public class ConstantPatternAnalyzerTests
             {
                 public void M(object? o)
                 {
-                    if (o {|DL3003:!= null|}) { }
+                    if ({|DL3003:o != null|}) { }
                 }
             }
             """
@@ -64,7 +64,7 @@ public class ConstantPatternAnalyzerTests
             {
                 public void M(object? o)
                 {
-                    if ({|DL3003:null ==|} o) { }
+                    if ({|DL3003:null == o|}) { }
                 }
             }
             """
@@ -118,7 +118,7 @@ public class ConstantPatternAnalyzerTests
             {
                 public void M(bool b)
                 {
-                    if (b {|DL3003:== true|}) { }
+                    if ({|DL3003:b == true|}) { }
                 }
             }
             """
@@ -136,7 +136,7 @@ public class ConstantPatternAnalyzerTests
             {
                 public void M(bool b)
                 {
-                    if (b {|DL3003:== false|}) { }
+                    if ({|DL3003:b == false|}) { }
                 }
             }
             """
@@ -154,7 +154,7 @@ public class ConstantPatternAnalyzerTests
             {
                 public void M(bool b)
                 {
-                    if (b {|DL3003:!= true|}) { }
+                    if ({|DL3003:b != true|}) { }
                 }
             }
             """
@@ -172,7 +172,7 @@ public class ConstantPatternAnalyzerTests
             {
                 public void M(bool b)
                 {
-                    if (b {|DL3003:!= false|}) { }
+                    if ({|DL3003:b != false|}) { }
                 }
             }
             """
@@ -192,7 +192,7 @@ public class ConstantPatternAnalyzerTests
             {
                 public void M(List<int> x)
                 {
-                    if (x.Count {|DL3003:== 42|}) { }
+                    if ({|DL3003:x.Count == 42|}) { }
                 }
             }
             """
@@ -210,7 +210,7 @@ public class ConstantPatternAnalyzerTests
             {
                 public void M(int x)
                 {
-                    if (x {|DL3003:!= 0|}) { }
+                    if ({|DL3003:x != 0|}) { }
                 }
             }
             """
@@ -228,7 +228,7 @@ public class ConstantPatternAnalyzerTests
             {
                 public void M(int x)
                 {
-                    if ({|DL3003:42 ==|} x) { }
+                    if ({|DL3003:42 == x|}) { }
                 }
             }
             """
@@ -266,7 +266,7 @@ public class ConstantPatternAnalyzerTests
             {
                 public void M(Color c)
                 {
-                    if (c {|DL3003:== Color.Red|}) { }
+                    if ({|DL3003:c == Color.Red|}) { }
                 }
             }
             """
@@ -286,7 +286,7 @@ public class ConstantPatternAnalyzerTests
             {
                 public void M(Color c)
                 {
-                    if (c {|DL3003:!= Color.Blue|}) { }
+                    if ({|DL3003:c != Color.Blue|}) { }
                 }
             }
             """
@@ -304,7 +304,7 @@ public class ConstantPatternAnalyzerTests
             {
                 public void M(char ch)
                 {
-                    if (ch {|DL3003:== 'a'|}) { }
+                    if ({|DL3003:ch == 'a'|}) { }
                 }
             }
             """
@@ -324,7 +324,7 @@ public class ConstantPatternAnalyzerTests
 
                 public void M(int retries)
                 {
-                    if (retries {|DL3003:== MaxRetries|}) { }
+                    if ({|DL3003:retries == MaxRetries|}) { }
                 }
             }
             """
@@ -421,8 +421,8 @@ public class ConstantPatternAnalyzerTests
             {
                 public void M(object? o, int x)
                 {
-                    if (o {|DL3003:== null|}) { }
-                    if (x {|DL3003:!= 0|}) { }
+                    if ({|DL3003:o == null|}) { }
+                    if ({|DL3003:x != 0|}) { }
                 }
             }
             """
@@ -440,7 +440,7 @@ public class ConstantPatternAnalyzerTests
             {
                 public C(object? o)
                 {
-                    if (o {|DL3003:== null|}) throw new System.ArgumentNullException();
+                    if ({|DL3003:o == null|}) throw new System.ArgumentNullException();
                 }
             }
             """
@@ -457,7 +457,7 @@ public class ConstantPatternAnalyzerTests
             public class C
             {
                 private object? _value;
-                public bool HasValue => _value {|DL3003:!= null|};
+                public bool HasValue => {|DL3003:_value != null|};
             }
             """
         );
@@ -478,7 +478,7 @@ public class ConstantPatternAnalyzerTests
             {
                 public void M(List<string?> items)
                 {
-                    items.Where(s => s {|DL3003:!= null|});
+                    items.Where(s => {|DL3003:s != null|});
                 }
             }
             """
@@ -496,7 +496,7 @@ public class ConstantPatternAnalyzerTests
             {
                 public void M(object? o)
                 {
-                    bool IsNull() => o {|DL3003:== null|};
+                    bool IsNull() => {|DL3003:o == null|};
                 }
             }
             """
@@ -512,7 +512,7 @@ public class ConstantPatternAnalyzerTests
             """
             public class C
             {
-                public string M(object? o) => o {|DL3003:== null|} ? "null" : "not null";
+                public string M(object? o) => {|DL3003:o == null|} ? "null" : "not null";
             }
             """
         );
@@ -529,7 +529,630 @@ public class ConstantPatternAnalyzerTests
             {
                 public void M(int x)
                 {
-                    if (x {|DL3003:== -1|}) { }
+                    if ({|DL3003:x == -1|}) { }
+                }
+            }
+            """
+        );
+
+        await test.RunAsync();
+    }
+
+    [Test]
+    public async Task EqualsInLogicalOrChainSameVariable_NoDiagnostic()
+    {
+        var test = CreateTest(
+            """
+            public class C
+            {
+                public void M(int? id)
+                {
+                    if (id == null || id == 0)
+                    {
+                        return;
+                    }
+                }
+            }
+            """
+        );
+
+        await test.RunAsync();
+    }
+
+    [Test]
+    public async Task EqualsInLogicalOrChainWithHasValue_NoDiagnostic()
+    {
+        var test = CreateTest(
+            """
+            public class C
+            {
+                public int? M(int? id)
+                {
+                    if (!id.HasValue || id == 0)
+                        return null;
+                    return id;
+                }
+            }
+            """
+        );
+
+        await test.RunAsync();
+    }
+
+    [Test]
+    public async Task EqualsInLogicalOrChainDifferentVariables_ReportsDiagnostic()
+    {
+        var test = CreateTest(
+            """
+            public class C
+            {
+                public void M(int x, int y)
+                {
+                    if ({|DL3003:x == 5|} || y > 3)
+                    {
+                        return;
+                    }
+                }
+            }
+            """
+        );
+
+        await test.RunAsync();
+    }
+
+    [Test]
+    public async Task EqualsInLogicalOrChainMixedEqualityAndRelational_NoDiagnostic()
+    {
+        var test = CreateTest(
+            """
+            public class C
+            {
+                public void M(int? id)
+                {
+                    if (id == null || id > 10)
+                    {
+                        return;
+                    }
+                }
+            }
+            """
+        );
+
+        await test.RunAsync();
+    }
+
+    [Test]
+    public async Task NotEqualsInLogicalAndChainSameVariable_NoDiagnostic()
+    {
+        var test = CreateTest(
+            """
+            public class C
+            {
+                public void M(int x)
+                {
+                    if (x != 1 && x != 2)
+                    {
+                        return;
+                    }
+                }
+            }
+            """
+        );
+
+        await test.RunAsync();
+    }
+
+    [Test]
+    public async Task NotEqualsInLogicalAndChainWithHasValue_NoDiagnostic()
+    {
+        var test = CreateTest(
+            """
+            public class C
+            {
+                public void M(int? id)
+                {
+                    if (id.HasValue && id != 0)
+                    {
+                        return;
+                    }
+                }
+            }
+            """
+        );
+
+        await test.RunAsync();
+    }
+
+    [Test]
+    public async Task HasValueEqualsFalse_ReportsDiagnostic()
+    {
+        var test = CreateTest(
+            """
+            public class C
+            {
+                public void M(int? id)
+                {
+                    if ({|DL3003:id.HasValue == false|}) { }
+                }
+            }
+            """
+        );
+
+        await test.RunAsync();
+    }
+
+    [Test]
+    public async Task HasValueEqualsTrue_ReportsDiagnostic()
+    {
+        var test = CreateTest(
+            """
+            public class C
+            {
+                public void M(int? id)
+                {
+                    if ({|DL3003:id.HasValue == true|}) { }
+                }
+            }
+            """
+        );
+
+        await test.RunAsync();
+    }
+
+    [Test]
+    public async Task HasValueNotEqualsTrue_ReportsDiagnostic()
+    {
+        var test = CreateTest(
+            """
+            public class C
+            {
+                public void M(int? id)
+                {
+                    if ({|DL3003:id.HasValue != true|}) { }
+                }
+            }
+            """
+        );
+
+        await test.RunAsync();
+    }
+
+    [Test]
+    public async Task HasValueNotEqualsFalse_ReportsDiagnostic()
+    {
+        var test = CreateTest(
+            """
+            public class C
+            {
+                public void M(int? id)
+                {
+                    if ({|DL3003:id.HasValue != false|}) { }
+                }
+            }
+            """
+        );
+
+        await test.RunAsync();
+    }
+
+    [Test]
+    public async Task HasValueOnLocalVariable_ReportsDiagnostic()
+    {
+        var test = CreateTest(
+            """
+            public class C
+            {
+                public void M()
+                {
+                    int? x = 5;
+                    if ({|DL3003:x.HasValue == false|}) { }
+                }
+            }
+            """
+        );
+
+        await test.RunAsync();
+    }
+
+    [Test]
+    public async Task HasValueOnProperty_ReportsDiagnostic()
+    {
+        var test = CreateTest(
+            """
+            public class C
+            {
+                public int? Value { get; set; }
+
+                public void M()
+                {
+                    if ({|DL3003:Value.HasValue == true|}) { }
+                }
+            }
+            """
+        );
+
+        await test.RunAsync();
+    }
+
+    [Test]
+    public async Task HasValueOnField_ReportsDiagnostic()
+    {
+        var test = CreateTest(
+            """
+            public class C
+            {
+                private int? _id;
+
+                public void M()
+                {
+                    if ({|DL3003:_id.HasValue != true|}) { }
+                }
+            }
+            """
+        );
+
+        await test.RunAsync();
+    }
+
+    [Test]
+    public async Task HasValueOnNestedPropertyAccess_ReportsDiagnostic()
+    {
+        var test = CreateTest(
+            """
+            public class Inner { public int? Id { get; set; } }
+
+            public class C
+            {
+                public void M(Inner inner)
+                {
+                    if ({|DL3003:inner.Id.HasValue == true|}) { }
+                }
+            }
+            """
+        );
+
+        await test.RunAsync();
+    }
+
+    [Test]
+    public async Task HasValueOnCustomType_ReportsDiagnostic()
+    {
+        var test = CreateTest(
+            """
+            public class Option
+            {
+                public bool HasValue { get; set; }
+            }
+
+            public class C
+            {
+                public void M(Option opt)
+                {
+                    if ({|DL3003:opt.HasValue == true|}) { }
+                }
+            }
+            """
+        );
+
+        await test.RunAsync();
+    }
+
+    [Test]
+    public async Task NullNotEqualsReversed_ReportsDiagnostic()
+    {
+        var test = CreateTest(
+            """
+            public class C
+            {
+                public void M(object? o)
+                {
+                    if ({|DL3003:null != o|}) { }
+                }
+            }
+            """
+        );
+
+        await test.RunAsync();
+    }
+
+    [Test]
+    public async Task WrappedComparisonEqualsFalse_ReportsDiagnostic()
+    {
+        var test = CreateTest(
+            """
+            public class C
+            {
+                public void M(object? o)
+                {
+                    if ({|DL3003:(o == null) == false|}) { }
+                }
+            }
+            """
+        );
+
+        await test.RunAsync();
+    }
+
+    [Test]
+    public async Task WrappedComparisonEqualsTrue_ReportsDiagnostic()
+    {
+        var test = CreateTest(
+            """
+            public class C
+            {
+                public void M(object? o)
+                {
+                    if ({|DL3003:(o == null) == true|}) { }
+                }
+            }
+            """
+        );
+
+        await test.RunAsync();
+    }
+
+    [Test]
+    public async Task WrappedNotEqualsComparisonEqualsFalse_ReportsDiagnostic()
+    {
+        var test = CreateTest(
+            """
+            public class C
+            {
+                public void M(object? o)
+                {
+                    if ({|DL3003:(o != null) == false|}) { }
+                }
+            }
+            """
+        );
+
+        await test.RunAsync();
+    }
+
+    [Test]
+    public async Task ComparisonIsFalse_ReportsDiagnostic()
+    {
+        var test = CreateTest(
+            """
+            public class C
+            {
+                public void M(object? o)
+                {
+                    if ({|DL3003:(o == null) is false|}) { }
+                }
+            }
+            """
+        );
+
+        await test.RunAsync();
+    }
+
+    [Test]
+    public async Task ComparisonIsTrue_ReportsDiagnostic()
+    {
+        var test = CreateTest(
+            """
+            public class C
+            {
+                public void M(object? o)
+                {
+                    if ({|DL3003:(o == null) is true|}) { }
+                }
+            }
+            """
+        );
+
+        await test.RunAsync();
+    }
+
+    [Test]
+    public async Task NotEqualsComparisonIsFalse_ReportsDiagnostic()
+    {
+        var test = CreateTest(
+            """
+            public class C
+            {
+                public void M(object? o)
+                {
+                    if ({|DL3003:(o != null) is false|}) { }
+                }
+            }
+            """
+        );
+
+        await test.RunAsync();
+    }
+
+    [Test]
+    public async Task IsNullIsFalse_ReportsDiagnostic()
+    {
+        var test = CreateTest(
+            """
+            public class C
+            {
+                public void M(object? o)
+                {
+                    if ({|DL3003:(o is null) is false|}) { }
+                }
+            }
+            """
+        );
+
+        await test.RunAsync();
+    }
+
+    [Test]
+    public async Task IsNotNullIsFalse_ReportsDiagnostic()
+    {
+        var test = CreateTest(
+            """
+            public class C
+            {
+                public void M(object? o)
+                {
+                    if ({|DL3003:(o is not null) is false|}) { }
+                }
+            }
+            """
+        );
+
+        await test.RunAsync();
+    }
+
+    [Test]
+    public async Task IsNullIsTrue_ReportsDiagnostic()
+    {
+        var test = CreateTest(
+            """
+            public class C
+            {
+                public void M(object? o)
+                {
+                    if ({|DL3003:(o is null) is true|}) { }
+                }
+            }
+            """
+        );
+
+        await test.RunAsync();
+    }
+
+    [Test]
+    public async Task IsNotNullIsTrue_ReportsDiagnostic()
+    {
+        var test = CreateTest(
+            """
+            public class C
+            {
+                public void M(object? o)
+                {
+                    if ({|DL3003:(o is not null) is true|}) { }
+                }
+            }
+            """
+        );
+
+        await test.RunAsync();
+    }
+
+    [Test]
+    public async Task ValueType_IsNullIsFalse_ReportsDiagnostic()
+    {
+        var test = CreateTest(
+            """
+            public class C
+            {
+                public void M(int? id)
+                {
+                    if ({|DL3003:(id == null) is false|}) { }
+                }
+            }
+            """
+        );
+
+        await test.RunAsync();
+    }
+
+    [Test]
+    public async Task ComparisonNotEqualsTrue_ReportsDiagnostic()
+    {
+        var test = CreateTest(
+            """
+            public class C
+            {
+                public void M(object? o)
+                {
+                    if ({|DL3003:(o == null) != true|}) { }
+                }
+            }
+            """
+        );
+
+        await test.RunAsync();
+    }
+
+    [Test]
+    public async Task NotEqualsComparisonEqualsTrue_ReportsDiagnostic()
+    {
+        var test = CreateTest(
+            """
+            public class C
+            {
+                public void M(object? o)
+                {
+                    if ({|DL3003:(o != null) == true|}) { }
+                }
+            }
+            """
+        );
+
+        await test.RunAsync();
+    }
+
+    [Test]
+    public async Task NotEqualsComparisonIsTrue_ReportsDiagnostic()
+    {
+        var test = CreateTest(
+            """
+            public class C
+            {
+                public void M(object? o)
+                {
+                    if ({|DL3003:(o != null) is true|}) { }
+                }
+            }
+            """
+        );
+
+        await test.RunAsync();
+    }
+
+    [Test]
+    public async Task ValueType_ComparisonEqualsFalse_ReportsDiagnostic()
+    {
+        var test = CreateTest(
+            """
+            public class C
+            {
+                public void M(int? id)
+                {
+                    if ({|DL3003:(id == null) == false|}) { }
+                }
+            }
+            """
+        );
+
+        await test.RunAsync();
+    }
+
+    [Test]
+    public async Task ValueType_IsNullIsTrue_ReportsDiagnostic()
+    {
+        var test = CreateTest(
+            """
+            public class C
+            {
+                public void M(int? id)
+                {
+                    if ({|DL3003:(id is null) is false|}) { }
+                }
+            }
+            """
+        );
+
+        await test.RunAsync();
+    }
+
+    [Test]
+    public async Task NestedNegatedHasValueWrapped_ReportsDiagnostic()
+    {
+        var test = CreateTest(
+            """
+            public class C
+            {
+                public void M(int? id)
+                {
+                    if ({|DL3003:(!(id.HasValue) is true) == false|}) { }
                 }
             }
             """

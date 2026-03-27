@@ -164,7 +164,7 @@ public class LogicalPatternAnalyzerTests
     }
 
     [Test]
-    public async Task MixedOperators_NoDiagnostic()
+    public async Task MixedEqualityAndRelationalOr_ReportsDiagnostic()
     {
         var test = CreateTest(
             """
@@ -172,7 +172,7 @@ public class LogicalPatternAnalyzerTests
             {
                 public void M(int x)
                 {
-                    if (x == 1 || x > 10) { }
+                    if ({|DL3005:x == 1 || x > 10|}) { }
                 }
             }
             """
@@ -286,6 +286,180 @@ public class LogicalPatternAnalyzerTests
                 {
                     if ({|DL3005:x == 1 || x == 2|}) { }
                     if ({|DL3005:y >= 0 && y < 100|}) { }
+                }
+            }
+            """
+        );
+
+        await test.RunAsync();
+    }
+
+    [Test]
+    public async Task NullableEqualsNullOrEqualsConstant_ReportsDiagnostic()
+    {
+        var test = CreateTest(
+            """
+            public class C
+            {
+                public void M(int? id)
+                {
+                    if ({|DL3005:id == null || id == 0|})
+                    {
+                        return;
+                    }
+                }
+            }
+            """
+        );
+
+        await test.RunAsync();
+    }
+
+    [Test]
+    public async Task HasValueNegationOrEqualsConstant_ReportsDiagnostic()
+    {
+        var test = CreateTest(
+            """
+            public class C
+            {
+                public int? M(int? id)
+                {
+                    if ({|DL3005:!id.HasValue || id == 0|})
+                        return null;
+                    return id;
+                }
+            }
+            """
+        );
+
+        await test.RunAsync();
+    }
+
+    [Test]
+    public async Task NullableEqualityOrRelational_ReportsDiagnostic()
+    {
+        var test = CreateTest(
+            """
+            public class C
+            {
+                public void M(int? id)
+                {
+                    if ({|DL3005:id == null || id > 10|})
+                    {
+                        return;
+                    }
+                }
+            }
+            """
+        );
+
+        await test.RunAsync();
+    }
+
+    [Test]
+    public async Task HasValueAndNotEqualsConstant_ReportsDiagnostic()
+    {
+        var test = CreateTest(
+            """
+            public class C
+            {
+                public int? M(int? id)
+                {
+                    if ({|DL3005:id.HasValue && id != 0|})
+                        return id;
+                    return null;
+                }
+            }
+            """
+        );
+
+        await test.RunAsync();
+    }
+
+    [Test]
+    public async Task NullableNotEqualsAndChain_ReportsDiagnostic()
+    {
+        var test = CreateTest(
+            """
+            public class C
+            {
+                public void M(int? id)
+                {
+                    if ({|DL3005:id != null && id != 0|})
+                    {
+                        return;
+                    }
+                }
+            }
+            """
+        );
+
+        await test.RunAsync();
+    }
+
+    [Test]
+    public async Task CustomTypeWithHasValueProperty_NoDiagnostic()
+    {
+        var test = CreateTest(
+            """
+            public class Option
+            {
+                public bool HasValue { get; set; }
+                public int Value { get; set; }
+            }
+
+            public class C
+            {
+                public void M(Option opt)
+                {
+                    if (!opt.HasValue || opt.Value == 0) { }
+                }
+            }
+            """
+        );
+
+        await test.RunAsync();
+    }
+
+    [Test]
+    public async Task CustomTypeWithHasValuePropertyAnd_NoDiagnostic()
+    {
+        var test = CreateTest(
+            """
+            public class Option
+            {
+                public bool HasValue { get; set; }
+                public int Value { get; set; }
+            }
+
+            public class C
+            {
+                public void M(Option opt)
+                {
+                    if (opt.HasValue && opt.Value != 0) { }
+                }
+            }
+            """
+        );
+
+        await test.RunAsync();
+    }
+
+    [Test]
+    public async Task CustomTypeWithHasValueOrNull_NoDiagnostic()
+    {
+        var test = CreateTest(
+            """
+            public class Option
+            {
+                public bool HasValue { get; set; }
+            }
+
+            public class C
+            {
+                public void M(Option opt)
+                {
+                    if (!opt.HasValue || opt == null) { }
                 }
             }
             """
