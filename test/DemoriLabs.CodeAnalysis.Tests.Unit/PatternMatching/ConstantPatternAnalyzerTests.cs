@@ -1160,4 +1160,112 @@ public class ConstantPatternAnalyzerTests
 
         await test.RunAsync();
     }
+
+    [Test]
+    public async Task NegatedHasValueIsTrue_ReportsDiagnostic()
+    {
+        var test = CreateTest(
+            """
+            public class C
+            {
+                public void M(int? id)
+                {
+                    if ({|DL3003:(!id.HasValue) is true|}) { }
+                }
+            }
+            """
+        );
+
+        await test.RunAsync();
+    }
+
+    [Test]
+    public async Task NegatedHasValueIsFalse_ReportsDiagnostic()
+    {
+        var test = CreateTest(
+            """
+            public class C
+            {
+                public void M(int? id)
+                {
+                    if ({|DL3003:(!id.HasValue) is false|}) { }
+                }
+            }
+            """
+        );
+
+        await test.RunAsync();
+    }
+
+    [Test]
+    public async Task NegatedHasValueIsNotTrue_ReportsDiagnostic()
+    {
+        var test = CreateTest(
+            """
+            public class C
+            {
+                public void M(int? id)
+                {
+                    if ({|DL3003:(!id.HasValue) is not true|}) { }
+                }
+            }
+            """
+        );
+
+        await test.RunAsync();
+    }
+
+    [Test]
+    public async Task NegatedHasValueIsNotFalse_ReportsDiagnostic()
+    {
+        var test = CreateTest(
+            """
+            public class C
+            {
+                public void M(int? id)
+                {
+                    if ({|DL3003:(!id.HasValue) is not false|}) { }
+                }
+            }
+            """
+        );
+
+        await test.RunAsync();
+    }
+
+    [Test]
+    public async Task NegatedBoolIsTrue_ReportsDiagnostic()
+    {
+        var test = CreateTest(
+            """
+            public class C
+            {
+                public void M(bool flag)
+                {
+                    if ({|DL3003:(!flag) is true|}) { }
+                }
+            }
+            """
+        );
+
+        await test.RunAsync();
+    }
+
+    [Test]
+    public async Task NegatedBoolIsFalse_ReportsDiagnostic()
+    {
+        var test = CreateTest(
+            """
+            public class C
+            {
+                public void M(bool flag)
+                {
+                    if ({|DL3003:(!flag) is false|}) { }
+                }
+            }
+            """
+        );
+
+        await test.RunAsync();
+    }
 }

@@ -1185,6 +1185,168 @@ public class ConstantPatternCodeFixTests
     }
 
     [Test]
+    public async Task NegatedHasValueIsTrue_FixesToIsNull()
+    {
+        var test = CreateTest(
+            """
+            public class C
+            {
+                public void M(int? id)
+                {
+                    if ({|DL3003:(!id.HasValue) is true|}) { }
+                }
+            }
+            """,
+            """
+            public class C
+            {
+                public void M(int? id)
+                {
+                    if (id is null) { }
+                }
+            }
+            """
+        );
+
+        await test.RunAsync();
+    }
+
+    [Test]
+    public async Task NegatedHasValueIsFalse_FixesToIsNotNull()
+    {
+        var test = CreateTest(
+            """
+            public class C
+            {
+                public void M(int? id)
+                {
+                    if ({|DL3003:(!id.HasValue) is false|}) { }
+                }
+            }
+            """,
+            """
+            public class C
+            {
+                public void M(int? id)
+                {
+                    if (id is not null) { }
+                }
+            }
+            """
+        );
+
+        await test.RunAsync();
+    }
+
+    [Test]
+    public async Task NegatedHasValueIsNotTrue_FixesToIsNotNull()
+    {
+        var test = CreateTest(
+            """
+            public class C
+            {
+                public void M(int? id)
+                {
+                    if ({|DL3003:(!id.HasValue) is not true|}) { }
+                }
+            }
+            """,
+            """
+            public class C
+            {
+                public void M(int? id)
+                {
+                    if (id is not null) { }
+                }
+            }
+            """
+        );
+
+        await test.RunAsync();
+    }
+
+    [Test]
+    public async Task NegatedHasValueIsNotFalse_FixesToIsNull()
+    {
+        var test = CreateTest(
+            """
+            public class C
+            {
+                public void M(int? id)
+                {
+                    if ({|DL3003:(!id.HasValue) is not false|}) { }
+                }
+            }
+            """,
+            """
+            public class C
+            {
+                public void M(int? id)
+                {
+                    if (id is null) { }
+                }
+            }
+            """
+        );
+
+        await test.RunAsync();
+    }
+
+    [Test]
+    public async Task NegatedBoolIsTrue_FixesToIsFalse()
+    {
+        var test = CreateTest(
+            """
+            public class C
+            {
+                public void M(bool flag)
+                {
+                    if ({|DL3003:(!flag) is true|}) { }
+                }
+            }
+            """,
+            """
+            public class C
+            {
+                public void M(bool flag)
+                {
+                    if (flag is false) { }
+                }
+            }
+            """
+        );
+
+        await test.RunAsync();
+    }
+
+    [Test]
+    public async Task NegatedBoolIsFalse_FixesToIsTrue()
+    {
+        var test = CreateTest(
+            """
+            public class C
+            {
+                public void M(bool flag)
+                {
+                    if ({|DL3003:(!flag) is false|}) { }
+                }
+            }
+            """,
+            """
+            public class C
+            {
+                public void M(bool flag)
+                {
+                    if (flag is true) { }
+                }
+            }
+            """
+        );
+
+        await test.RunAsync();
+    }
+
+    [Test]
     public async Task NestedNegatedHasValueWrapped_FixesToIsNotNull()
     {
         var test = CreateTest(

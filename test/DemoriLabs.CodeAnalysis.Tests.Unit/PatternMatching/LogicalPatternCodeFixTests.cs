@@ -102,4 +102,132 @@ public class LogicalPatternCodeFixTests
 
         await test.RunAsync();
     }
+
+    [Test]
+    public async Task NegatedHasValueOrEquals_FixesToOrPattern()
+    {
+        var test = CreateTest(
+            """
+            public class C
+            {
+                public int? M(int? id)
+                {
+                    if ({|DL3005:!id.HasValue || id == 0|})
+                        return null;
+                    return id;
+                }
+            }
+            """,
+            """
+            public class C
+            {
+                public int? M(int? id)
+                {
+                    if (id is null or 0)
+                        return null;
+                    return id;
+                }
+            }
+            """
+        );
+
+        await test.RunAsync();
+    }
+
+    [Test]
+    public async Task HasValueAndNotEquals_FixesToAndPattern()
+    {
+        var test = CreateTest(
+            """
+            public class C
+            {
+                public int? M(int? id)
+                {
+                    if ({|DL3005:id.HasValue && id != 0|})
+                        return id;
+                    return null;
+                }
+            }
+            """,
+            """
+            public class C
+            {
+                public int? M(int? id)
+                {
+                    if (id is not null and not 0)
+                        return id;
+                    return null;
+                }
+            }
+            """
+        );
+
+        await test.RunAsync();
+    }
+
+    [Test]
+    public async Task NullOrEqualsConstant_FixesToOrPattern()
+    {
+        var test = CreateTest(
+            """
+            public class C
+            {
+                public void M(int? id)
+                {
+                    if ({|DL3005:id == null || id == 0|})
+                    {
+                        return;
+                    }
+                }
+            }
+            """,
+            """
+            public class C
+            {
+                public void M(int? id)
+                {
+                    if (id is null or 0)
+                    {
+                        return;
+                    }
+                }
+            }
+            """
+        );
+
+        await test.RunAsync();
+    }
+
+    [Test]
+    public async Task MixedEqualityAndRelationalOr_FixesToOrPattern()
+    {
+        var test = CreateTest(
+            """
+            public class C
+            {
+                public void M(int? id)
+                {
+                    if ({|DL3005:id == null || id > 10|})
+                    {
+                        return;
+                    }
+                }
+            }
+            """,
+            """
+            public class C
+            {
+                public void M(int? id)
+                {
+                    if (id is null or > 10)
+                    {
+                        return;
+                    }
+                }
+            }
+            """
+        );
+
+        await test.RunAsync();
+    }
 }
