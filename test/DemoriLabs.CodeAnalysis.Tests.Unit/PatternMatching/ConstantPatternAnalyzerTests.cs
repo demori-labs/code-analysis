@@ -664,6 +664,48 @@ public class ConstantPatternAnalyzerTests
     }
 
     [Test]
+    public async Task NotEqualsNullInMixedAndChain_NoDiagnostic()
+    {
+        var test = CreateTest(
+            """
+            public class C
+            {
+                public void M(int? id)
+                {
+                    if (id != null && id > 0)
+                    {
+                        return;
+                    }
+                }
+            }
+            """
+        );
+
+        await test.RunAsync();
+    }
+
+    [Test]
+    public async Task NotEqualsNullWithValueAccess_NoDiagnostic()
+    {
+        var test = CreateTest(
+            """
+            public class C
+            {
+                public void M(int? id)
+                {
+                    if (id != null && id.Value > 0)
+                    {
+                        return;
+                    }
+                }
+            }
+            """
+        );
+
+        await test.RunAsync();
+    }
+
+    [Test]
     public async Task HasValueEqualsFalse_ReportsDiagnostic()
     {
         var test = CreateTest(

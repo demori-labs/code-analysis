@@ -439,4 +439,25 @@ public class NegationPatternAnalyzerTests
 
         await test.RunAsync();
     }
+
+    [Test]
+    public async Task HasValueNegationWithValueAccessInAndChain_NoDiagnostic()
+    {
+        var test = CreateTest(
+            """
+            public class C
+            {
+                public void M(int? id)
+                {
+                    if (!id.HasValue || id.Value == 0)
+                    {
+                        return;
+                    }
+                }
+            }
+            """
+        );
+
+        await test.RunAsync();
+    }
 }

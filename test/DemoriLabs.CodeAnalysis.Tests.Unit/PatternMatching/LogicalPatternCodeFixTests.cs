@@ -230,4 +230,136 @@ public class LogicalPatternCodeFixTests
 
         await test.RunAsync();
     }
+
+    [Test]
+    public async Task MixedNotEqualsAndRelational_FixesToAndPattern()
+    {
+        var test = CreateTest(
+            """
+            public class C
+            {
+                public void M(int? id)
+                {
+                    if ({|DL3005:id != null && id > 0|})
+                    {
+                        return;
+                    }
+                }
+            }
+            """,
+            """
+            public class C
+            {
+                public void M(int? id)
+                {
+                    if (id is not null and > 0)
+                    {
+                        return;
+                    }
+                }
+            }
+            """
+        );
+
+        await test.RunAsync();
+    }
+
+    [Test]
+    public async Task IsPatternAndChain_FixesToCombinedPattern()
+    {
+        var test = CreateTest(
+            """
+            public class C
+            {
+                public void M(int? id)
+                {
+                    if ({|DL3005:id is not null && id is not 0|})
+                    {
+                        return;
+                    }
+                }
+            }
+            """,
+            """
+            public class C
+            {
+                public void M(int? id)
+                {
+                    if (id is not null and not 0)
+                    {
+                        return;
+                    }
+                }
+            }
+            """
+        );
+
+        await test.RunAsync();
+    }
+
+    [Test]
+    public async Task IsPatternAndRelational_FixesToCombinedPattern()
+    {
+        var test = CreateTest(
+            """
+            public class C
+            {
+                public void M(int? id)
+                {
+                    if ({|DL3005:id is not null && id is > 0|})
+                    {
+                        return;
+                    }
+                }
+            }
+            """,
+            """
+            public class C
+            {
+                public void M(int? id)
+                {
+                    if (id is not null and > 0)
+                    {
+                        return;
+                    }
+                }
+            }
+            """
+        );
+
+        await test.RunAsync();
+    }
+
+    [Test]
+    public async Task IsPatternOrChain_FixesToCombinedPattern()
+    {
+        var test = CreateTest(
+            """
+            public class C
+            {
+                public void M(int? id)
+                {
+                    if ({|DL3005:id is null || id is 0|})
+                    {
+                        return;
+                    }
+                }
+            }
+            """,
+            """
+            public class C
+            {
+                public void M(int? id)
+                {
+                    if (id is null or 0)
+                    {
+                        return;
+                    }
+                }
+            }
+            """
+        );
+
+        await test.RunAsync();
+    }
 }
