@@ -10,4 +10,8 @@
         <PackageReference Include="Microsoft.CodeAnalysis.CSharp.CodeFix.Testing" />
         <PackageReference Include="Microsoft.CodeAnalysis.CSharp.Workspaces" />
     </ItemGroup>
+
+    <ItemGroup>
+        <PackageVersion Update="TUnit" Version="1.24.0" />
+    </ItemGroup>
 </Project>
