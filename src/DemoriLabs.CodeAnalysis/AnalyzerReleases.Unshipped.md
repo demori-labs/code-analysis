@@ -13,7 +13,7 @@ DL1005 | Design | Warning | UsePrimaryConstructorAnalyzer
 DL2001 | Usage | Error | ReadOnlyParameterAnalyzer
 DL2002 | Usage | Error | ReadOnlyParameterAnalyzer
 DL2003 | Usage | Warning | SuggestReadOnlyPrimaryConstructorParameterAnalyzer
-DL2004 | Usage | Error | SuggestReadOnlyPrimaryConstructorParameterAnalyzer
+DL2004 | Usage | Info | SuggestReadOnlyMethodParameterAnalyzer
 DL3001 | Style | Warning | NamedArgumentAnalyzer
 DL3002 | Style | Warning | InvertIfToReduceNestingAnalyzer
 DL3003 | Style | Warning | ConstantPatternAnalyzer

@@ -11,9 +11,9 @@ internal static class RuleIdentifiers
 
     // DL2xxx — Usage
     public const string ReadOnlyParameter = "DL2001";
-    public const string ReadOnlyIncompatibleModifier = "DL2002";
+    public const string IncompatibleAttributeModifier = "DL2002";
     public const string SuggestReadOnlyPrimaryConstructorParameter = "DL2003";
-    public const string MutableIncompatibleModifier = "DL2004";
+    public const string SuggestReadOnlyMethodParameter = "DL2004";
     public const string UnusedParameter = "DL2005";
 
     // DL3xxx — Style

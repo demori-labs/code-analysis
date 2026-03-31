@@ -17,20 +17,17 @@ public sealed class ReadOnlyParameterAnalyzer : DiagnosticAnalyzer
         RuleCategories.Usage,
         DiagnosticSeverity.Error,
         isEnabledByDefault: true,
-        description: "Parameters marked with [ReadOnly] cannot be reassigned within the method body. "
-            + "Introduce a new local variable instead."
+        description: "Parameters marked with [ReadOnly] cannot be reassigned within the method body. Introduce a new local variable instead."
     );
 
     private static readonly DiagnosticDescriptor IncompatibleModifierRule = new(
-        RuleIdentifiers.ReadOnlyIncompatibleModifier,
-        title: "[ReadOnly] is incompatible with this parameter modifier",
-        messageFormat: "[ReadOnly] cannot be applied to a '{0}' parameter",
+        RuleIdentifiers.IncompatibleAttributeModifier,
+        title: "Incompatible attribute on parameter",
+        messageFormat: "{0}",
         RuleCategories.Usage,
         DiagnosticSeverity.Error,
         isEnabledByDefault: true,
-        description: "'out' parameters must be assigned by the callee, 'ref' parameters exist to be mutated, "
-            + "and 'in' parameters are already read-only by the modifier. "
-            + "Remove [ReadOnly] or change the parameter modifier."
+        description: "[ReadOnly] and [Mutable] cannot be combined. [ReadOnly] cannot be applied to ref/out/in parameters. [Mutable] has no effect on parameters that are already readonly (records, readonly structs)."
     );
 
     /// <inheritdoc />
@@ -67,36 +64,151 @@ public sealed class ReadOnlyParameterAnalyzer : DiagnosticAnalyzer
     private static void AnalyzeParameter(SyntaxNodeAnalysisContext context)
     {
         var parameter = (ParameterSyntax)context.Node;
-
-        var readOnlyAttr = FindReadOnlyAttributeSyntax(parameter, context.SemanticModel, context.CancellationToken);
-        if (readOnlyAttr is null)
+        var parameterSymbol = context.SemanticModel.GetDeclaredSymbol(parameter, context.CancellationToken);
+        if (parameterSymbol is null)
             return;
 
-        var refKindToken = parameter.Modifiers.FirstOrDefault(m =>
-            m.Kind() is SyntaxKind.RefKeyword or SyntaxKind.OutKeyword or SyntaxKind.InKeyword
-        );
+        var hasReadOnly = AnnotationAttributes.HasReadOnlyAttribute(parameterSymbol);
+        var hasMutable = AnnotationAttributes.HasMutableAttribute(parameterSymbol);
 
-        if (refKindToken.Kind() is not SyntaxKind.None)
+        switch (hasReadOnly)
         {
-            context.ReportDiagnostic(
-                Diagnostic.Create(IncompatibleModifierRule, readOnlyAttr.GetLocation(), refKindToken.ValueText)
-            );
-            return;
+            // [ReadOnly] + [Mutable] conflict
+            case true when hasMutable:
+            {
+                var readOnlyAttr = FindReadOnlyAttributeSyntax(
+                    parameter,
+                    context.SemanticModel,
+                    context.CancellationToken
+                );
+                if (readOnlyAttr is not null)
+                {
+                    context.ReportDiagnostic(
+                        Diagnostic.Create(
+                            IncompatibleModifierRule,
+                            readOnlyAttr.GetLocation(),
+                            "[ReadOnly] and [Mutable] cannot be applied to the same parameter"
+                        )
+                    );
+                }
+
+                return;
+            }
+            // [ReadOnly] incompatibilities
+            case true:
+            {
+                var readOnlyAttr = FindReadOnlyAttributeSyntax(
+                    parameter,
+                    context.SemanticModel,
+                    context.CancellationToken
+                );
+                if (readOnlyAttr is null)
+                    return;
+
+                // [ReadOnly] on ref/out/in
+                var refKindToken = parameter.Modifiers.FirstOrDefault(m =>
+                    m.Kind() is SyntaxKind.RefKeyword or SyntaxKind.OutKeyword or SyntaxKind.InKeyword
+                );
+
+                if (refKindToken.Kind() is not SyntaxKind.None)
+                {
+                    context.ReportDiagnostic(
+                        Diagnostic.Create(
+                            IncompatibleModifierRule,
+                            readOnlyAttr.GetLocation(),
+                            $"[ReadOnly] cannot be applied to a '{refKindToken.ValueText}' parameter"
+                        )
+                    );
+                    return;
+                }
+
+                // [ReadOnly] on record or readonly struct primary constructor
+                if (parameter.Parent?.Parent is not TypeDeclarationSyntax readOnlyTypeDecl)
+                    return;
+
+                var incompatibleKind = readOnlyTypeDecl switch
+                {
+                    RecordDeclarationSyntax { RawKind: (int)SyntaxKind.RecordDeclaration } => "record class",
+                    RecordDeclarationSyntax => "record struct",
+                    StructDeclarationSyntax when readOnlyTypeDecl.Modifiers.Any(SyntaxKind.ReadOnlyKeyword) =>
+                        "readonly struct",
+                    _ => null,
+                };
+
+                if (incompatibleKind is not null)
+                {
+                    context.ReportDiagnostic(
+                        Diagnostic.Create(
+                            IncompatibleModifierRule,
+                            readOnlyAttr.GetLocation(),
+                            $"[ReadOnly] has no effect on a {incompatibleKind} parameter — it is already readonly"
+                        )
+                    );
+                }
+
+                return;
+            }
         }
 
-        if (
-            parameter.Parent?.Parent is not RecordDeclarationSyntax record
-            || (
-                record.Kind() is not SyntaxKind.RecordDeclaration
-                && !record.Modifiers.Any(m => m.Kind() is SyntaxKind.ReadOnlyKeyword)
-            )
-        )
+        // [Mutable] on record or readonly struct primary constructor
+        if (hasMutable && parameter.Parent?.Parent is TypeDeclarationSyntax typeDecl)
         {
-            return;
+            var incompatibleKind = typeDecl switch
+            {
+                RecordDeclarationSyntax { RawKind: (int)SyntaxKind.RecordDeclaration } => "record class",
+                RecordDeclarationSyntax => "record struct",
+                StructDeclarationSyntax when typeDecl.Modifiers.Any(SyntaxKind.ReadOnlyKeyword) => "readonly struct",
+                _ => null,
+            };
+
+            if (incompatibleKind is not null)
+            {
+                var mutableAttr = FindMutableAttributeSyntax(
+                    parameter,
+                    context.SemanticModel,
+                    context.CancellationToken
+                );
+                if (mutableAttr is not null)
+                {
+                    context.ReportDiagnostic(
+                        Diagnostic.Create(
+                            IncompatibleModifierRule,
+                            mutableAttr.GetLocation(),
+                            $"[Mutable] cannot be applied to a {incompatibleKind} parameter — record parameters generate properties, not fields"
+                        )
+                    );
+                }
+            }
+        }
+    }
+
+    private static AttributeSyntax? FindMutableAttributeSyntax(
+        ParameterSyntax parameter,
+        SemanticModel semanticModel,
+        CancellationToken cancellationToken
+    )
+    {
+        foreach (var attrList in parameter.AttributeLists)
+        {
+            foreach (var attr in attrList.Attributes)
+            {
+                var attrCtor = semanticModel.GetSymbolInfo(attr, cancellationToken).Symbol as IMethodSymbol;
+                if (
+                    attrCtor?.ContainingType is { } type
+                    && string.Equals(type.Name, "MutableAttribute", StringComparison.OrdinalIgnoreCase)
+                    && string.Equals(
+                        type.ContainingNamespace?.ToDisplayString(),
+                        "DemoriLabs.CodeAnalysis.Attributes",
+                        StringComparison.OrdinalIgnoreCase
+                    )
+                )
+                {
+                    return attr;
+                }
+            }
         }
 
-        var kind = record.Kind() is SyntaxKind.RecordDeclaration ? "record class" : "readonly record struct";
-        context.ReportDiagnostic(Diagnostic.Create(IncompatibleModifierRule, readOnlyAttr.GetLocation(), kind));
+        return null;
     }
 
     private static AttributeSyntax? FindReadOnlyAttributeSyntax(

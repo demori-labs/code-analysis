@@ -174,46 +174,4 @@ public class SuggestReadOnlyPrimaryConstructorParameterAnalyzerTests
 
         await test.RunAsync();
     }
-
-    [Test]
-    public async Task RecordClass_MutableParameter_ReportsError()
-    {
-        var test = CreateTest(
-            """
-            using DemoriLabs.CodeAnalysis.Attributes;
-
-            public record Widget([{|DL2004:Mutable|}] int count);
-            """
-        );
-
-        await test.RunAsync();
-    }
-
-    [Test]
-    public async Task ReadOnlyStruct_MutableParameter_ReportsError()
-    {
-        var test = CreateTest(
-            """
-            using DemoriLabs.CodeAnalysis.Attributes;
-
-            public readonly struct Widget([{|DL2004:Mutable|}] int count);
-            """
-        );
-
-        await test.RunAsync();
-    }
-
-    [Test]
-    public async Task ReadOnlyRecordStruct_MutableParameter_ReportsError()
-    {
-        var test = CreateTest(
-            """
-            using DemoriLabs.CodeAnalysis.Attributes;
-
-            public readonly record struct Widget([{|DL2004:Mutable|}] int count);
-            """
-        );
-
-        await test.RunAsync();
-    }
 }

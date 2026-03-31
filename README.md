@@ -15,8 +15,9 @@ Roslyn analyzers and code fixes for C#, designed to enforce design patterns, cat
 | [DL1004](docs/analyzers/DL1004.md)        | Data class could be a record                         |
 | [DL1005](docs/analyzers/DL1005.md)        | Type can use a primary constructor                   |
 | [DL2001](docs/analyzers/DL2001-DL2002.md) | Parameter must not be reassigned                     |
-| [DL2002](docs/analyzers/DL2001-DL2002.md) | `[ReadOnly]` is incompatible with parameter modifier |
+| [DL2002](docs/analyzers/DL2001-DL2002.md) | Incompatible attribute on parameter                  |
 | [DL2003](docs/analyzers/DL2003.md)        | Primary constructor parameter should be `[ReadOnly]` |
+| [DL2004](docs/analyzers/DL2004.md)        | Method parameter should be `[ReadOnly]`              |
 | [DL2005](docs/analyzers/DL2005.md)        | Parameter is never used in method body               |
 | [DL3001](docs/analyzers/DL3001.md)        | Use named arguments                                  |
 | [DL3002](docs/analyzers/DL3002.md)        | Invert `if` statement to reduce nesting              |

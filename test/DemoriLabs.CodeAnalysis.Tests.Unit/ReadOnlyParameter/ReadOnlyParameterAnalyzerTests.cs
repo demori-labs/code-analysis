@@ -296,7 +296,7 @@ public class ReadOnlyParameterAnalyzerTests
     }
 
     [Test]
-    public async Task ReadOnlyOnNormalParameter_NoDL2002()
+    public async Task ReadOnlyOnMethodParameter_NoReassignment_NoDiagnostic()
     {
         var test = CreateTest(
             """
@@ -467,19 +467,13 @@ public class ReadOnlyParameterAnalyzerTests
     }
 
     [Test]
-    public async Task RecordStructPrimaryConstructorParameter_ReportsDiagnostic()
+    public async Task RecordStructPrimaryConstructorParameter_ReportsIncompatible()
     {
         var test = CreateTest(
             """
             using DemoriLabs.CodeAnalysis.Attributes;
 
-            public record struct Counter([ReadOnly] int Value)
-            {
-                public void Reset()
-                {
-                    {|DL2001:Value = 0|};
-                }
-            }
+            public record struct Counter([{|DL2002:ReadOnly|}] int Value);
             """
         );
 
@@ -583,6 +577,184 @@ public class ReadOnlyParameterAnalyzerTests
                 {
                     {|DL2001:x = 1|};
                     y = 2;
+                }
+            }
+            """
+        );
+
+        await test.RunAsync();
+    }
+
+    [Test]
+    public async Task RecordClass_MutableParameter_ReportsIncompatible()
+    {
+        var test = CreateTest(
+            """
+            using DemoriLabs.CodeAnalysis.Attributes;
+
+            public record Widget([{|DL2002:Mutable|}] int count);
+            """
+        );
+
+        await test.RunAsync();
+    }
+
+    [Test]
+    public async Task ReadOnlyStruct_MutableParameter_ReportsIncompatible()
+    {
+        var test = CreateTest(
+            """
+            using DemoriLabs.CodeAnalysis.Attributes;
+
+            public readonly struct Widget([{|DL2002:Mutable|}] int count);
+            """
+        );
+
+        await test.RunAsync();
+    }
+
+    [Test]
+    public async Task ReadOnlyRecordStruct_MutableParameter_ReportsIncompatible()
+    {
+        var test = CreateTest(
+            """
+            using DemoriLabs.CodeAnalysis.Attributes;
+
+            public readonly record struct Widget([{|DL2002:Mutable|}] int count);
+            """
+        );
+
+        await test.RunAsync();
+    }
+
+    [Test]
+    public async Task ReadOnlyAndMutableConflict_MethodParameter_ReportsIncompatible()
+    {
+        var test = CreateTest(
+            """
+            using DemoriLabs.CodeAnalysis.Attributes;
+
+            public class C
+            {
+                public void M([{|DL2002:ReadOnly|}][Mutable] int x)
+                {
+                    _ = x;
+                }
+            }
+            """
+        );
+
+        await test.RunAsync();
+    }
+
+    [Test]
+    public async Task ReadOnlyAndMutableConflict_PrimaryConstructor_ReportsIncompatible()
+    {
+        var test = CreateTest(
+            """
+            using DemoriLabs.CodeAnalysis.Attributes;
+
+            public class Widget([{|DL2002:ReadOnly|}][Mutable] int count);
+            """
+        );
+
+        await test.RunAsync();
+    }
+
+    [Test]
+    public async Task MutableThenReadOnlyConflict_MethodParameter_ReportsIncompatible()
+    {
+        var test = CreateTest(
+            """
+            using DemoriLabs.CodeAnalysis.Attributes;
+
+            public class C
+            {
+                public void M([Mutable][{|DL2002:ReadOnly|}] int x)
+                {
+                    _ = x;
+                }
+            }
+            """
+        );
+
+        await test.RunAsync();
+    }
+
+    [Test]
+    public async Task MutableThenReadOnlyConflict_PrimaryConstructor_ReportsIncompatible()
+    {
+        var test = CreateTest(
+            """
+            using DemoriLabs.CodeAnalysis.Attributes;
+
+            public class Widget([Mutable][{|DL2002:ReadOnly|}] int count);
+            """
+        );
+
+        await test.RunAsync();
+    }
+
+    [Test]
+    public async Task RecordStruct_MutableParameter_ReportsIncompatible()
+    {
+        var test = CreateTest(
+            """
+            using DemoriLabs.CodeAnalysis.Attributes;
+
+            public record struct Counter([{|DL2002:Mutable|}] int value);
+            """
+        );
+
+        await test.RunAsync();
+    }
+
+    [Test]
+    public async Task ReadOnlyStruct_ReadOnlyParameter_ReportsIncompatible()
+    {
+        var test = CreateTest(
+            """
+            using DemoriLabs.CodeAnalysis.Attributes;
+
+            public readonly struct Widget([{|DL2002:ReadOnly|}] int count);
+            """
+        );
+
+        await test.RunAsync();
+    }
+
+    [Test]
+    public async Task ReadOnlyOnMethodParameter_NoIncompatibleDiagnostic()
+    {
+        var test = CreateTest(
+            """
+            using DemoriLabs.CodeAnalysis.Attributes;
+
+            public class C
+            {
+                public void M([ReadOnly] int x)
+                {
+                    _ = x;
+                }
+            }
+            """
+        );
+
+        await test.RunAsync();
+    }
+
+    [Test]
+    public async Task MutableOnMethodParameter_NoIncompatibleDiagnostic()
+    {
+        var test = CreateTest(
+            """
+            using DemoriLabs.CodeAnalysis.Attributes;
+
+            public class C
+            {
+                public void M([Mutable] int x)
+                {
+                    x = 5;
                 }
             }
             """
