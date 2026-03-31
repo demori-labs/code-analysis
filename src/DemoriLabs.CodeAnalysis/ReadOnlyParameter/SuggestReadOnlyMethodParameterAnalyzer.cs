@@ -17,7 +17,7 @@ public sealed class SuggestReadOnlyMethodParameterAnalyzer : DiagnosticAnalyzer
         RuleCategories.Usage,
         DiagnosticSeverity.Info,
         isEnabledByDefault: true,
-        description: "Method parameters that are never reassigned should be marked with [ReadOnly] to prevent accidental mutation."
+        description: "Method parameters should be marked with [ReadOnly] to prevent accidental mutation, or [Mutable] to explicitly opt out."
     );
 
     /// <inheritdoc />
@@ -47,25 +47,15 @@ public sealed class SuggestReadOnlyMethodParameterAnalyzer : DiagnosticAnalyzer
             return;
         }
 
-        var parameters = context.Node switch
+        var hasBody = context.Node switch
         {
-            MethodDeclarationSyntax { Body: not null } or MethodDeclarationSyntax { ExpressionBody: not null } => (
-                (MethodDeclarationSyntax)context.Node
-            )
-                .ParameterList
-                .Parameters,
-            ConstructorDeclarationSyntax { Body: not null }
-            or ConstructorDeclarationSyntax { ExpressionBody: not null } => ((ConstructorDeclarationSyntax)context.Node)
-                .ParameterList
-                .Parameters,
-            LocalFunctionStatementSyntax { Body: not null }
-            or LocalFunctionStatementSyntax { ExpressionBody: not null } => ((LocalFunctionStatementSyntax)context.Node)
-                .ParameterList
-                .Parameters,
-            _ => default,
+            MethodDeclarationSyntax m => m.Body is not null || m.ExpressionBody is not null,
+            ConstructorDeclarationSyntax c => c.Body is not null || c.ExpressionBody is not null,
+            LocalFunctionStatementSyntax l => l.Body is not null || l.ExpressionBody is not null,
+            _ => false,
         };
 
-        if (parameters.Count == 0)
+        if (hasBody is false)
             return;
 
         if (
@@ -96,7 +86,6 @@ public sealed class SuggestReadOnlyMethodParameterAnalyzer : DiagnosticAnalyzer
 
         foreach (var parameter in parameterList.Parameters)
         {
-            // Unnamed receiver (static extension) — skip
             if (parameter.Identifier.IsMissing || parameter.Identifier.Text.Length == 0)
                 continue;
 
@@ -172,9 +161,7 @@ public sealed class SuggestReadOnlyMethodParameterAnalyzer : DiagnosticAnalyzer
     {
         var candidates = new HashSet<ISymbol>(SymbolEqualityComparer.Default);
 
-        var startIndex = 0;
-
-        for (var i = startIndex; i < method.Parameters.Length; i++)
+        for (var i = 0; i < method.Parameters.Length; i++)
         {
             var param = method.Parameters[i];
 
