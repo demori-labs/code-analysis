@@ -59,6 +59,10 @@ public sealed class UseStringEqualsAnalyzer : DiagnosticAnalyzer
         if (IsNullOrDefault(left) || IsNullOrDefault(right))
             return;
 
+        // Skip empty string comparisons — DL5002 suggests string.IsNullOrEmpty instead
+        if (IsEmptyString(left) || IsEmptyString(right))
+            return;
+
         var leftType = context.SemanticModel.GetTypeInfo(left, context.CancellationToken).Type;
         var rightType = context.SemanticModel.GetTypeInfo(right, context.CancellationToken).Type;
 
@@ -106,8 +110,11 @@ public sealed class UseStringEqualsAnalyzer : DiagnosticAnalyzer
 
         switch (isPattern.Pattern)
         {
-            case ConstantPatternSyntax { Expression.RawKind: (int)SyntaxKind.StringLiteralExpression } constantPattern:
-                literalText = constantPattern.Expression.ToString();
+            case ConstantPatternSyntax
+            {
+                Expression: LiteralExpressionSyntax { RawKind: (int)SyntaxKind.StringLiteralExpression } literal,
+            } when literal.Token.ValueText.Length > 0:
+                literalText = literal.ToString();
                 isNegated = false;
                 break;
             case UnaryPatternSyntax
@@ -115,10 +122,13 @@ public sealed class UseStringEqualsAnalyzer : DiagnosticAnalyzer
                 RawKind: (int)SyntaxKind.NotPattern,
                 Pattern: ConstantPatternSyntax
                 {
-                    Expression.RawKind: (int)SyntaxKind.StringLiteralExpression,
-                } innerConstant,
-            }:
-                literalText = innerConstant.Expression.ToString();
+                    Expression: LiteralExpressionSyntax
+                    {
+                        RawKind: (int)SyntaxKind.StringLiteralExpression,
+                    } innerLiteral,
+                },
+            } when innerLiteral.Token.ValueText.Length > 0:
+                literalText = innerLiteral.ToString();
                 isNegated = true;
                 break;
             default:
@@ -161,5 +171,11 @@ public sealed class UseStringEqualsAnalyzer : DiagnosticAnalyzer
         return expr.IsKind(SyntaxKind.NullLiteralExpression)
             || expr.IsKind(SyntaxKind.DefaultLiteralExpression)
             || expr is DefaultExpressionSyntax;
+    }
+
+    private static bool IsEmptyString(ExpressionSyntax expr)
+    {
+        return expr
+            is LiteralExpressionSyntax { RawKind: (int)SyntaxKind.StringLiteralExpression, Token.ValueText.Length: 0 };
     }
 }

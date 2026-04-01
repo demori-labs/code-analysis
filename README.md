@@ -39,5 +39,6 @@ Roslyn analyzers and code fixes for C#, designed to enforce design patterns, cat
 | [DL4001](docs/analyzers/DL4001-DL4002.md) | Cognitive complexity is moderate                     |
 | [DL4002](docs/analyzers/DL4001-DL4002.md) | Cognitive complexity is elevated                     |
 | [DL5001](docs/analyzers/DL5001.md)        | Possible multiple enumeration                        |
+| [DL5002](docs/analyzers/DL5002.md)        | Use `string.IsNullOrEmpty`                           |
 
 See each rule's documentation for severity, code fix availability, configuration options, and attributes.

@@ -41,4 +41,5 @@ internal static class RuleIdentifiers
 
     // DL5xxx — Performance
     public const string PossibleMultipleEnumeration = "DL5001";
+    public const string UseIsNullOrEmpty = "DL5002";
 }

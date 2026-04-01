@@ -35,3 +35,4 @@ DL5001 | Performance | Warning | MultipleEnumerationAnalyzer
 DL3016 | Style | Warning | RedundantTypePatternAnalyzer
 DL2005 | Usage | Warning | UnusedParameterAnalyzer
 DL3017 | Style | Warning | UseStringEqualsAnalyzer
+DL5002 | Performance | Warning | UseIsNullOrEmptyAnalyzer

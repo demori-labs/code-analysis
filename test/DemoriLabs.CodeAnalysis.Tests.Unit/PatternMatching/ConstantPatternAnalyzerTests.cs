@@ -256,6 +256,42 @@ public class ConstantPatternAnalyzerTests
     }
 
     [Test]
+    public async Task EqualsEmptyStringLiteral_NoDiagnostic()
+    {
+        var test = CreateTest(
+            """
+            public class C
+            {
+                public void M(string s)
+                {
+                    if (s == "") { }
+                }
+            }
+            """
+        );
+
+        await test.RunAsync();
+    }
+
+    [Test]
+    public async Task StringLengthEqualsZero_NoDiagnostic()
+    {
+        var test = CreateTest(
+            """
+            public class C
+            {
+                public void M(string s)
+                {
+                    if (s.Length == 0) { }
+                }
+            }
+            """
+        );
+
+        await test.RunAsync();
+    }
+
+    [Test]
     public async Task EqualsEnumMember_ReportsDiagnostic()
     {
         var test = CreateTest(

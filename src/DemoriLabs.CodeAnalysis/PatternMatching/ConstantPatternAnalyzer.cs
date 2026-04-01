@@ -95,6 +95,13 @@ public sealed class ConstantPatternAnalyzer : DiagnosticAnalyzer
             return;
         }
 
+        // Skip str.Length == 0 — DL5002 suggests string.IsNullOrEmpty instead
+        var variable2 = leftIsConstant ? right : left;
+        if (IsStringLengthZeroComparison(variable2, constant, context.SemanticModel, context.CancellationToken))
+        {
+            return;
+        }
+
         if (
             expressionType is not null
             && ExpressionTreeHelper.IsInsideExpressionTree(
@@ -432,5 +439,22 @@ public sealed class ConstantPatternAnalyzer : DiagnosticAnalyzer
                 return constantValue.HasValue;
             }
         }
+    }
+
+    private static bool IsStringLengthZeroComparison(
+        ExpressionSyntax variable,
+        ExpressionSyntax constant,
+        SemanticModel semanticModel,
+        CancellationToken ct
+    )
+    {
+        if (constant is not LiteralExpressionSyntax { Token.ValueText: "0" })
+            return false;
+
+        if (variable is not MemberAccessExpressionSyntax { Name.Identifier.Text: "Length" } memberAccess)
+            return false;
+
+        var receiverType = semanticModel.GetTypeInfo(memberAccess.Expression, ct).Type;
+        return receiverType?.SpecialType is SpecialType.System_String;
     }
 }
