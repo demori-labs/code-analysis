@@ -16,7 +16,7 @@ public sealed class UnusedParameterAnalyzer : DiagnosticAnalyzer
         title: "Unused method parameter",
         messageFormat: "Parameter '{0}' is never used",
         RuleCategories.Usage,
-        DiagnosticSeverity.Info,
+        DiagnosticSeverity.Warning,
         isEnabledByDefault: true,
         description: "Method parameters that are never referenced in the method body can be safely removed to reduce complexity and improve readability."
     );

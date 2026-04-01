@@ -69,6 +69,35 @@ public class SuggestReadOnlyPrimaryConstructorParameterCodeFixBenchmarks
 }
 
 [MemoryDiagnoser]
+public class SuggestReadOnlyMethodParameterCodeFixBenchmarks
+{
+    private CodeFixRunner _runner = null!;
+    private readonly SuggestReadOnlyMethodParameterCodeFix _codeFix = new();
+
+    [GlobalSetup]
+    public async Task Setup()
+    {
+        _runner = await CodeFixRunner.CreateAsync<SuggestReadOnlyMethodParameterAnalyzer>(
+            """
+            public class Service
+            {
+                public void Process(int id)
+                {
+                    System.Console.WriteLine(id);
+                }
+            }
+            """
+        );
+    }
+
+    [Benchmark]
+    public async Task<Solution> ApplyFix()
+    {
+        return await _runner.ApplyFixAsync(_codeFix);
+    }
+}
+
+[MemoryDiagnoser]
 public class ReadOnlyIncompatibleModifierCodeFixBenchmarks
 {
     private CodeFixRunner _runner = null!;

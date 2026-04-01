@@ -79,3 +79,38 @@ public class SuggestReadOnlyPrimaryConstructorParameterAnalyzerBenchmarks
         );
     }
 }
+
+[MemoryDiagnoser]
+public class SuggestReadOnlyMethodParameterAnalyzerBenchmarks
+{
+    private CSharpCompilation _compilation = null!;
+
+    [GlobalSetup]
+    public void Setup()
+    {
+        _compilation = CompilationFactory.CreateCompilation(
+            """
+            public class Service
+            {
+                public void Process(int id, string name, bool active)
+                {
+                    System.Console.WriteLine(id);
+                    System.Console.WriteLine(name);
+                    System.Console.WriteLine(active);
+                }
+
+                public void Update(int id)
+                {
+                    id = 5;
+                }
+            }
+            """
+        );
+    }
+
+    [Benchmark]
+    public async Task Analyze()
+    {
+        await CompilationFactory.RunAnalyzerAsync(_compilation, new SuggestReadOnlyMethodParameterAnalyzer());
+    }
+}
