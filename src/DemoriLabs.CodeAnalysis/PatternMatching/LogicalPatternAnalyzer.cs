@@ -43,6 +43,47 @@ public sealed class LogicalPatternAnalyzer : DiagnosticAnalyzer
         });
     }
 
+    /// <summary>
+    /// Checks whether the given expression is a leaf inside a logical pattern chain
+    /// that this analyzer would report. Used by other analyzers to suppress overlapping diagnostics.
+    /// </summary>
+    internal static bool IsLeafOfLogicalPatternChain(
+        ExpressionSyntax expression,
+        SemanticModel semanticModel,
+        CancellationToken ct
+    )
+    {
+        if (
+            expression.Parent is not BinaryExpressionSyntax parent
+            || parent.Kind() is not SyntaxKind.LogicalOrExpression and not SyntaxKind.LogicalAndExpression
+        )
+        {
+            return false;
+        }
+
+        var kind = parent.Kind();
+        while (parent.Parent is BinaryExpressionSyntax grandParent && grandParent.Kind() == kind)
+            parent = grandParent;
+
+        var leaves = new List<ExpressionSyntax>();
+        FlattenChain(parent, kind, leaves);
+
+        if (leaves.Count < 2 || ContainsNonNullableHasValue(leaves, semanticModel, ct))
+            return false;
+
+        var isOr = kind is SyntaxKind.LogicalOrExpression;
+
+        if (isOr)
+        {
+            return AllLeavesAreOrCompatible(leaves) && AllLeavesCompareSameSymbol(leaves, semanticModel, ct);
+        }
+
+        if (AllLeavesAreAndCompatible(leaves))
+            return AllLeavesCompareSameSymbol(leaves, semanticModel, ct);
+
+        return false;
+    }
+
     private static void AnalyzeLogicalExpression(SyntaxNodeAnalysisContext context, INamedTypeSymbol? expressionType)
     {
         var binaryExpression = (BinaryExpressionSyntax)context.Node;
@@ -52,10 +93,10 @@ public sealed class LogicalPatternAnalyzer : DiagnosticAnalyzer
 
         var isOr = binaryExpression.IsKind(SyntaxKind.LogicalOrExpression);
 
-        var leaves = new List<BinaryExpressionSyntax>();
+        var leaves = new List<ExpressionSyntax>();
         FlattenChain(binaryExpression, binaryExpression.Kind(), leaves);
 
-        if (leaves.Count < 2)
+        if (leaves.Count < 2 || ContainsNonNullableHasValue(leaves, context.SemanticModel, context.CancellationToken))
             return;
 
         if (isOr)
@@ -71,11 +112,11 @@ public sealed class LogicalPatternAnalyzer : DiagnosticAnalyzer
     private static void TryReportOrPattern(
         SyntaxNodeAnalysisContext context,
         BinaryExpressionSyntax outerExpression,
-        List<BinaryExpressionSyntax> leaves,
+        List<ExpressionSyntax> leaves,
         INamedTypeSymbol? expressionType
     )
     {
-        if (AllLeavesAreEquality(leaves, SyntaxKind.EqualsExpression) is false)
+        if (AllLeavesAreOrCompatible(leaves) is false)
             return;
 
         if (AllLeavesCompareSameSymbol(leaves, context.SemanticModel, context.CancellationToken) is false)
@@ -95,8 +136,8 @@ public sealed class LogicalPatternAnalyzer : DiagnosticAnalyzer
         }
 
         var variableText = GetVariable(leaves[0]).ToString();
-        var constants = string.Join(" or ", GetConstants(leaves));
-        var suggestion = $"{variableText} is {constants}";
+        var patterns = string.Join(" or ", leaves.Select(BuildOrPatternPart));
+        var suggestion = $"{variableText} is {patterns}";
 
         context.ReportDiagnostic(
             Diagnostic.Create(Rule, outerExpression.GetLocation(), suggestion, outerExpression.ToString())
@@ -106,47 +147,11 @@ public sealed class LogicalPatternAnalyzer : DiagnosticAnalyzer
     private static void TryReportAndPattern(
         SyntaxNodeAnalysisContext context,
         BinaryExpressionSyntax outerExpression,
-        List<BinaryExpressionSyntax> leaves,
+        List<ExpressionSyntax> leaves,
         INamedTypeSymbol? expressionType
     )
     {
-        if (AllLeavesAreEquality(leaves, SyntaxKind.NotEqualsExpression))
-        {
-            if (AllLeavesCompareSameSymbol(leaves, context.SemanticModel, context.CancellationToken) is false)
-                return;
-
-            if (
-                expressionType is not null
-                && ExpressionTreeHelper.IsInsideExpressionTree(
-                    outerExpression,
-                    context.SemanticModel,
-                    expressionType,
-                    context.CancellationToken
-                )
-            )
-            {
-                return;
-            }
-
-            var variableText = GetVariable(leaves[0]).ToString();
-            var parts = new List<string>();
-            foreach (var leaf in leaves)
-            {
-                parts.Add($"not {GetConstant(leaf)}");
-            }
-
-            var suggestion = $"{variableText} is {string.Join(" and ", parts)}";
-
-            context.ReportDiagnostic(
-                Diagnostic.Create(Rule, outerExpression.GetLocation(), suggestion, outerExpression.ToString())
-            );
-            return;
-        }
-
-        if (leaves.Count is not 2)
-            return;
-
-        if (AllLeavesAreRelational(leaves) is false)
+        if (AllLeavesAreAndCompatible(leaves) is false)
             return;
 
         if (AllLeavesCompareSameSymbol(leaves, context.SemanticModel, context.CancellationToken) is false)
@@ -165,21 +170,16 @@ public sealed class LogicalPatternAnalyzer : DiagnosticAnalyzer
             return;
         }
 
-        var rangeVariable = GetVariable(leaves[0]).ToString();
-        var part0 = BuildRelationalPattern(leaves[0]);
-        var part1 = BuildRelationalPattern(leaves[1]);
-        var rangeSuggestion = $"{rangeVariable} is {part0} and {part1}";
+        var variableText = GetVariable(leaves[0]).ToString();
+        var parts = string.Join(" and ", leaves.Select(BuildAndPatternPart));
+        var suggestion = $"{variableText} is {parts}";
 
         context.ReportDiagnostic(
-            Diagnostic.Create(Rule, outerExpression.GetLocation(), rangeSuggestion, outerExpression.ToString())
+            Diagnostic.Create(Rule, outerExpression.GetLocation(), suggestion, outerExpression.ToString())
         );
     }
 
-    private static void FlattenChain(
-        BinaryExpressionSyntax expression,
-        SyntaxKind kind,
-        List<BinaryExpressionSyntax> leaves
-    )
+    private static void FlattenChain(BinaryExpressionSyntax expression, SyntaxKind kind, List<ExpressionSyntax> leaves)
     {
         switch (expression.Left)
         {
@@ -189,19 +189,80 @@ public sealed class LogicalPatternAnalyzer : DiagnosticAnalyzer
             case BinaryExpressionSyntax leftLeaf when IsComparisonExpression(leftLeaf):
                 leaves.Add(leftLeaf);
                 break;
+            case PrefixUnaryExpressionSyntax leftNot when IsNegatedHasValue(leftNot):
+                leaves.Add(leftNot);
+                break;
+            case MemberAccessExpressionSyntax leftHasValue when IsHasValueAccess(leftHasValue):
+                leaves.Add(leftHasValue);
+                break;
+            case IsPatternExpressionSyntax leftIsPattern:
+                leaves.Add(leftIsPattern);
+                break;
             default:
                 leaves.Clear();
                 return;
         }
 
-        if (expression.Right is BinaryExpressionSyntax rightLeaf && IsComparisonExpression(rightLeaf))
+        switch (expression.Right)
         {
-            leaves.Add(rightLeaf);
+            case BinaryExpressionSyntax rightLeaf when IsComparisonExpression(rightLeaf):
+                leaves.Add(rightLeaf);
+                break;
+            case PrefixUnaryExpressionSyntax rightNot when IsNegatedHasValue(rightNot):
+                leaves.Add(rightNot);
+                break;
+            case MemberAccessExpressionSyntax rightHasValue when IsHasValueAccess(rightHasValue):
+                leaves.Add(rightHasValue);
+                break;
+            case IsPatternExpressionSyntax rightIsPattern:
+                leaves.Add(rightIsPattern);
+                break;
+            default:
+                leaves.Clear();
+                break;
         }
-        else
+    }
+
+    private static bool IsNegatedHasValue(PrefixUnaryExpressionSyntax expr)
+    {
+        return expr.IsKind(SyntaxKind.LogicalNotExpression)
+            && expr.Operand is MemberAccessExpressionSyntax memberAccess
+            && IsHasValueAccess(memberAccess);
+    }
+
+    private static bool IsHasValueAccess(MemberAccessExpressionSyntax expr)
+    {
+        return string.Equals(expr.Name.Identifier.Text, "HasValue", StringComparison.Ordinal);
+    }
+
+    private static bool ContainsNonNullableHasValue(
+        List<ExpressionSyntax> leaves,
+        SemanticModel semanticModel,
+        CancellationToken ct
+    )
+    {
+        foreach (var leaf in leaves)
         {
-            leaves.Clear();
+            if (IsHasValueLeaf(leaf) is false)
+                continue;
+
+            var variable = GetVariable(leaf);
+            var type = semanticModel.GetTypeInfo(variable, ct).Type;
+            if (type?.OriginalDefinition.SpecialType is not SpecialType.System_Nullable_T)
+                return true;
         }
+
+        return false;
+    }
+
+    private static bool IsHasValueLeaf(ExpressionSyntax leaf)
+    {
+        return leaf switch
+        {
+            PrefixUnaryExpressionSyntax prefix => IsNegatedHasValue(prefix),
+            MemberAccessExpressionSyntax access => IsHasValueAccess(access),
+            _ => false,
+        };
     }
 
     private static bool IsComparisonExpression(BinaryExpressionSyntax expr)
@@ -215,17 +276,151 @@ public sealed class LogicalPatternAnalyzer : DiagnosticAnalyzer
                 or SyntaxKind.GreaterThanOrEqualExpression;
     }
 
-    private static bool AllLeavesAreEquality(List<BinaryExpressionSyntax> leaves, SyntaxKind kind)
+    private static bool AllLeavesAreAndCompatible(List<ExpressionSyntax> leaves)
     {
         foreach (var leaf in leaves)
         {
-            if (leaf.Kind() != kind)
+            switch (leaf)
+            {
+                case PrefixUnaryExpressionSyntax prefixUnary when IsNegatedHasValue(prefixUnary):
+                case MemberAccessExpressionSyntax memberAccess when IsHasValueAccess(memberAccess):
+                case IsPatternExpressionSyntax:
+                    continue;
+                case BinaryExpressionSyntax binary:
+                {
+                    if (
+                        binary.Kind()
+                        is not SyntaxKind.NotEqualsExpression
+                            and not SyntaxKind.LessThanExpression
+                            and not SyntaxKind.LessThanOrEqualExpression
+                            and not SyntaxKind.GreaterThanExpression
+                            and not SyntaxKind.GreaterThanOrEqualExpression
+                    )
+                    {
+                        return false;
+                    }
+
+                    if (HasConstantOperand(binary) is false)
+                        return false;
+
+                    if (HasStringLiteralOperand(binary))
+                        return false;
+
+                    continue;
+                }
+                default:
+                    return false;
+            }
+        }
+
+        return true;
+    }
+
+    private static string BuildAndPatternPart(ExpressionSyntax leaf)
+    {
+        // x.HasValue → not null
+        if (leaf is MemberAccessExpressionSyntax)
+            return "not null";
+
+        // !x.HasValue → null (shouldn't appear in && but handle gracefully)
+        if (leaf is PrefixUnaryExpressionSyntax)
+            return "null";
+
+        // x is not null → not null, x is > 0 → > 0
+        if (leaf is IsPatternExpressionSyntax isPattern)
+            return isPattern.Pattern.WithoutTrivia().ToString();
+
+        var comparison = (BinaryExpressionSyntax)leaf;
+
+        // x != constant → not constant
+        if (comparison.IsKind(SyntaxKind.NotEqualsExpression))
+            return $"not {GetConstant(comparison)}";
+
+        // x > constant → > constant (relational)
+        return BuildRelationalPattern(comparison);
+    }
+
+    private static bool AllLeavesAreOrCompatible(List<ExpressionSyntax> leaves)
+    {
+        foreach (var leaf in leaves)
+        {
+            if (leaf is PrefixUnaryExpressionSyntax prefixUnary && IsNegatedHasValue(prefixUnary))
+                continue;
+
+            if (leaf is IsPatternExpressionSyntax)
+                continue;
+
+            if (leaf is not BinaryExpressionSyntax binary)
                 return false;
 
-            if (HasConstantOperand(leaf) is false)
+            if (
+                binary.Kind()
+                is not SyntaxKind.EqualsExpression
+                    and not SyntaxKind.LessThanExpression
+                    and not SyntaxKind.LessThanOrEqualExpression
+                    and not SyntaxKind.GreaterThanExpression
+                    and not SyntaxKind.GreaterThanOrEqualExpression
+            )
+            {
+                return false;
+            }
+
+            if (HasConstantOperand(binary) is false)
                 return false;
 
-            if (HasStringLiteralOperand(leaf))
+            if (HasStringLiteralOperand(binary))
+                return false;
+        }
+
+        return true;
+    }
+
+    private static string BuildOrPatternPart(ExpressionSyntax leaf)
+    {
+        if (leaf is PrefixUnaryExpressionSyntax)
+            return "null";
+
+        if (leaf is IsPatternExpressionSyntax isPattern)
+            return isPattern.Pattern.WithoutTrivia().ToString();
+
+        var comparison = (BinaryExpressionSyntax)leaf;
+
+        if (comparison.IsKind(SyntaxKind.EqualsExpression))
+            return GetConstant(comparison);
+
+        return BuildRelationalPattern(comparison);
+    }
+
+    private static bool AllLeavesAreEquality(List<ExpressionSyntax> leaves, SyntaxKind kind)
+    {
+        foreach (var leaf in leaves)
+        {
+            // !x.HasValue counts as equality against null (for || chains)
+            if (leaf is PrefixUnaryExpressionSyntax prefixUnary && IsNegatedHasValue(prefixUnary))
+            {
+                if (kind is not SyntaxKind.EqualsExpression)
+                    return false;
+                continue;
+            }
+
+            // x.HasValue counts as inequality against null (for && chains)
+            if (leaf is MemberAccessExpressionSyntax memberAccess && IsHasValueAccess(memberAccess))
+            {
+                if (kind is not SyntaxKind.NotEqualsExpression)
+                    return false;
+                continue;
+            }
+
+            if (leaf is not BinaryExpressionSyntax binary)
+                return false;
+
+            if (binary.Kind() != kind)
+                return false;
+
+            if (HasConstantOperand(binary) is false)
+                return false;
+
+            if (HasStringLiteralOperand(binary))
                 return false;
         }
 
@@ -238,12 +433,15 @@ public sealed class LogicalPatternAnalyzer : DiagnosticAnalyzer
             || expr.Right is LiteralExpressionSyntax { RawKind: (int)SyntaxKind.StringLiteralExpression };
     }
 
-    private static bool AllLeavesAreRelational(List<BinaryExpressionSyntax> leaves)
+    private static bool AllLeavesAreRelational(List<ExpressionSyntax> leaves)
     {
         foreach (var leaf in leaves)
         {
+            if (leaf is not BinaryExpressionSyntax binary)
+                return false;
+
             if (
-                leaf.Kind()
+                binary.Kind()
                 is not SyntaxKind.LessThanExpression
                     and not SyntaxKind.LessThanOrEqualExpression
                     and not SyntaxKind.GreaterThanExpression
@@ -253,7 +451,7 @@ public sealed class LogicalPatternAnalyzer : DiagnosticAnalyzer
                 return false;
             }
 
-            if (HasConstantOperand(leaf) is false)
+            if (HasConstantOperand(binary) is false)
                 return false;
         }
 
@@ -281,7 +479,7 @@ public sealed class LogicalPatternAnalyzer : DiagnosticAnalyzer
     }
 
     private static bool AllLeavesCompareSameSymbol(
-        List<BinaryExpressionSyntax> leaves,
+        List<ExpressionSyntax> leaves,
         SemanticModel semanticModel,
         CancellationToken ct
     )
@@ -289,8 +487,8 @@ public sealed class LogicalPatternAnalyzer : DiagnosticAnalyzer
         ISymbol? firstSymbol = null;
         foreach (var leaf in leaves)
         {
-            var variable = GetVariable(leaf);
-            var symbol = semanticModel.GetSymbolInfo(variable, ct).Symbol;
+            var leafVariable = GetVariable(leaf);
+            var symbol = ResolveNullableSymbol(leafVariable, semanticModel, ct);
             if (symbol is null)
                 return false;
 
@@ -307,18 +505,59 @@ public sealed class LogicalPatternAnalyzer : DiagnosticAnalyzer
         return firstSymbol is not null;
     }
 
-    private static ExpressionSyntax GetVariable(BinaryExpressionSyntax comparison)
+    /// <summary>
+    /// Resolves the symbol for a variable expression, unwrapping .Value on Nullable&lt;T&gt;
+    /// so that <c>id</c> and <c>id.Value</c> resolve to the same symbol.
+    /// </summary>
+    private static ISymbol? ResolveNullableSymbol(
+        ExpressionSyntax variable,
+        SemanticModel semanticModel,
+        CancellationToken ct
+    )
     {
+        // id.Value → unwrap to id if the receiver is Nullable<T>
+        if (
+            variable is MemberAccessExpressionSyntax { Name.Identifier.Text: "Value" } memberAccess
+            && semanticModel.GetTypeInfo(memberAccess.Expression, ct).Type?.OriginalDefinition.SpecialType
+                is SpecialType.System_Nullable_T
+        )
+        {
+            return semanticModel.GetSymbolInfo(memberAccess.Expression, ct).Symbol;
+        }
+
+        return semanticModel.GetSymbolInfo(variable, ct).Symbol;
+    }
+
+    private static ExpressionSyntax GetVariable(ExpressionSyntax leaf)
+    {
+        // !x.HasValue → variable is x
+        if (leaf is PrefixUnaryExpressionSyntax { Operand: MemberAccessExpressionSyntax negatedAccess })
+            return negatedAccess.Expression;
+
+        // x.HasValue → variable is x
+        if (leaf is MemberAccessExpressionSyntax hasValueAccess && IsHasValueAccess(hasValueAccess))
+            return hasValueAccess.Expression;
+
+        // x is not null → variable is x
+        if (leaf is IsPatternExpressionSyntax isPattern)
+            return isPattern.Expression;
+
+        var comparison = (BinaryExpressionSyntax)leaf;
         return IsLiteralOrConstant(comparison.Right) ? comparison.Left : comparison.Right;
     }
 
-    private static string GetConstant(BinaryExpressionSyntax comparison)
+    private static string GetConstant(ExpressionSyntax leaf)
     {
+        // !x.HasValue → null, x.HasValue → null
+        if (leaf is PrefixUnaryExpressionSyntax or MemberAccessExpressionSyntax)
+            return "null";
+
+        var comparison = (BinaryExpressionSyntax)leaf;
         var constant = IsLiteralOrConstant(comparison.Right) ? comparison.Right : comparison.Left;
         return constant.WithoutTrivia().ToString();
     }
 
-    private static IEnumerable<string> GetConstants(List<BinaryExpressionSyntax> leaves)
+    private static IEnumerable<string> GetConstants(List<ExpressionSyntax> leaves)
     {
         return leaves.Select(GetConstant);
     }

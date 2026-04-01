@@ -40,12 +40,34 @@ public sealed class ConstantPatternAnalyzer : DiagnosticAnalyzer
                 SyntaxKind.EqualsExpression,
                 SyntaxKind.NotEqualsExpression
             );
+
+            compilationContext.RegisterSyntaxNodeAction(
+                analysisContext => AnalyzeIsTrueFalsePattern(analysisContext, expressionType),
+                SyntaxKind.IsPatternExpression
+            );
         });
     }
 
     private static void AnalyzeBinaryExpression(SyntaxNodeAnalysisContext context, INamedTypeSymbol? expressionType)
     {
         var binaryExpression = (BinaryExpressionSyntax)context.Node;
+
+        if (
+            LogicalPatternAnalyzer.IsLeafOfLogicalPatternChain(
+                binaryExpression,
+                context.SemanticModel,
+                context.CancellationToken
+            )
+        )
+        {
+            return;
+        }
+
+        // Skip inner comparison when wrapped: (x == null) == false, (x != null) == true, etc.
+        if (IsWrappedInOuterComparison(binaryExpression))
+        {
+            return;
+        }
 
         var left = binaryExpression.Left;
         var right = binaryExpression.Right;
@@ -92,14 +114,241 @@ public sealed class ConstantPatternAnalyzer : DiagnosticAnalyzer
 
         var originalText = binaryExpression.ToString();
 
-        var operatorSpan = binaryExpression.OperatorToken.Span;
-        var constantSpan = constant.Span;
-        var start = Math.Min(operatorSpan.Start, constantSpan.Start);
-        var end = Math.Max(operatorSpan.End, constantSpan.End);
-        var diagnosticSpan = Microsoft.CodeAnalysis.Text.TextSpan.FromBounds(start, end);
-        var diagnosticLocation = Location.Create(binaryExpression.SyntaxTree, diagnosticSpan);
+        context.ReportDiagnostic(Diagnostic.Create(Rule, binaryExpression.GetLocation(), suggestion, originalText));
+    }
 
-        context.ReportDiagnostic(Diagnostic.Create(Rule, diagnosticLocation, suggestion, originalText));
+    private static void AnalyzeIsTrueFalsePattern(SyntaxNodeAnalysisContext context, INamedTypeSymbol? expressionType)
+    {
+        var isPattern = (IsPatternExpressionSyntax)context.Node;
+
+        // Handle: `expr is true`, `expr is false`, `expr is not true`, `expr is not false`
+        bool isFalsePattern;
+        switch (isPattern.Pattern)
+        {
+            case ConstantPatternSyntax { Expression.RawKind: (int)SyntaxKind.TrueLiteralExpression }:
+                isFalsePattern = false;
+                break;
+            case ConstantPatternSyntax { Expression.RawKind: (int)SyntaxKind.FalseLiteralExpression }:
+                isFalsePattern = true;
+                break;
+            case UnaryPatternSyntax
+            {
+                RawKind: (int)SyntaxKind.NotPattern,
+                Pattern: ConstantPatternSyntax { Expression.RawKind: (int)SyntaxKind.TrueLiteralExpression },
+            }:
+                // is not true == is false
+                isFalsePattern = true;
+                break;
+            case UnaryPatternSyntax
+            {
+                RawKind: (int)SyntaxKind.NotPattern,
+                Pattern: ConstantPatternSyntax { Expression.RawKind: (int)SyntaxKind.FalseLiteralExpression },
+            }:
+                // is not false == is true
+                isFalsePattern = false;
+                break;
+            default:
+                return;
+        }
+
+        // Skip if this is-pattern is itself wrapped in an outer comparison or negation
+        if (IsWrappedInOuterComparison(isPattern))
+        {
+            return;
+        }
+
+        // The expression must be a parenthesized comparison, is-pattern, or negated HasValue
+        var unwrapped = isPattern.Expression;
+        while (unwrapped is ParenthesizedExpressionSyntax paren)
+            unwrapped = paren.Expression;
+
+        switch (unwrapped)
+        {
+            case BinaryExpressionSyntax
+            {
+                RawKind: (int)SyntaxKind.EqualsExpression or (int)SyntaxKind.NotEqualsExpression,
+            } comparison:
+            {
+                if (
+                    expressionType is not null
+                    && ExpressionTreeHelper.IsInsideExpressionTree(
+                        isPattern,
+                        context.SemanticModel,
+                        expressionType,
+                        context.CancellationToken
+                    )
+                )
+                {
+                    return;
+                }
+
+                var suggestion = BuildComparisonSimplification(comparison, isFalsePattern);
+                context.ReportDiagnostic(
+                    Diagnostic.Create(Rule, isPattern.GetLocation(), suggestion, isPattern.ToString())
+                );
+                break;
+            }
+            case IsPatternExpressionSyntax innerIsPattern:
+            {
+                if (
+                    expressionType is not null
+                    && ExpressionTreeHelper.IsInsideExpressionTree(
+                        isPattern,
+                        context.SemanticModel,
+                        expressionType,
+                        context.CancellationToken
+                    )
+                )
+                {
+                    return;
+                }
+
+                var suggestion = BuildIsPatternSimplification(innerIsPattern, isFalsePattern);
+                context.ReportDiagnostic(
+                    Diagnostic.Create(Rule, isPattern.GetLocation(), suggestion, isPattern.ToString())
+                );
+                break;
+            }
+            // !(id.HasValue) is true/false/not true/not false
+            case PrefixUnaryExpressionSyntax { RawKind: (int)SyntaxKind.LogicalNotExpression } negation:
+            {
+                if (
+                    expressionType is not null
+                    && ExpressionTreeHelper.IsInsideExpressionTree(
+                        isPattern,
+                        context.SemanticModel,
+                        expressionType,
+                        context.CancellationToken
+                    )
+                )
+                {
+                    return;
+                }
+
+                var suggestion = BuildNegationSimplification(
+                    negation,
+                    isFalsePattern,
+                    context.SemanticModel,
+                    context.CancellationToken
+                );
+                if (suggestion is not null)
+                {
+                    context.ReportDiagnostic(
+                        Diagnostic.Create(Rule, isPattern.GetLocation(), suggestion, isPattern.ToString())
+                    );
+                }
+
+                break;
+            }
+        }
+    }
+
+    private static string BuildComparisonSimplification(BinaryExpressionSyntax comparison, bool negate)
+    {
+        var leftIsLiteral =
+            comparison.Left
+            is LiteralExpressionSyntax
+                or PrefixUnaryExpressionSyntax
+                {
+                    RawKind: (int)SyntaxKind.UnaryMinusExpression,
+                    Operand: LiteralExpressionSyntax,
+                }
+                or MemberAccessExpressionSyntax;
+        var variable = leftIsLiteral ? comparison.Right : comparison.Left;
+        var constant = leftIsLiteral ? comparison.Left : comparison.Right;
+
+        var innerIsEquals = comparison.IsKind(SyntaxKind.EqualsExpression);
+        var resultIsPositive = innerIsEquals != negate;
+
+        var variableText = variable.WithoutTrivia().ToFullString();
+        var constantText = constant.WithoutTrivia().ToFullString();
+
+        return resultIsPositive ? $"{variableText} is {constantText}" : $"{variableText} is not {constantText}";
+    }
+
+    private static string? BuildNegationSimplification(
+        PrefixUnaryExpressionSyntax negation,
+        bool isFalsePattern,
+        SemanticModel semanticModel,
+        CancellationToken ct
+    )
+    {
+        var inner = negation.Operand;
+        while (inner is ParenthesizedExpressionSyntax paren)
+            inner = paren.Expression;
+
+        // !id.HasValue on Nullable<T>: negation means "is null", so:
+        // !(id.HasValue) is true  → isFalse=false → id is null
+        // !(id.HasValue) is false → isFalse=true  → id is not null
+        // !(id.HasValue) is not true  → isFalse=true  → id is not null
+        // !(id.HasValue) is not false → isFalse=false → id is null
+        if (
+            inner is MemberAccessExpressionSyntax { Name.Identifier.Text: "HasValue" } hasValueAccess
+            && semanticModel.GetTypeInfo(hasValueAccess.Expression, ct).Type?.OriginalDefinition.SpecialType
+                is SpecialType.System_Nullable_T
+        )
+        {
+            var ownerText = hasValueAccess.Expression.WithoutTrivia().ToFullString();
+            return isFalsePattern ? $"{ownerText} is not null" : $"{ownerText} is null";
+        }
+
+        // Generic !expr: resolve based on boolean semantics
+        var operandText = negation.Operand.WithoutTrivia().ToFullString();
+        // !(expr) is true  → expr is false
+        // !(expr) is false → expr is true (double negation)
+        return isFalsePattern ? $"{operandText} is true" : $"{operandText} is false";
+    }
+
+    private static string BuildIsPatternSimplification(IsPatternExpressionSyntax isPattern, bool negate)
+    {
+        var expr = isPattern.Expression.WithoutTrivia().ToFullString();
+
+        if (negate)
+        {
+            if (isPattern.Pattern is UnaryPatternSyntax { RawKind: (int)SyntaxKind.NotPattern } notPattern)
+            {
+                return $"{expr} is {notPattern.Pattern.WithoutTrivia().ToFullString()}";
+            }
+
+            return $"{expr} is not {isPattern.Pattern.WithoutTrivia().ToFullString()}";
+        }
+
+        return $"{expr} is {isPattern.Pattern.WithoutTrivia().ToFullString()}";
+    }
+
+    private static bool IsWrappedInOuterComparison(SyntaxNode inner)
+    {
+        SyntaxNode? current = inner.Parent;
+        while (current is ParenthesizedExpressionSyntax)
+            current = current.Parent;
+
+        return current switch
+        {
+            // (x == null) == false, (x != null) == true, etc.
+            BinaryExpressionSyntax outer
+                when outer.Kind() is SyntaxKind.EqualsExpression or SyntaxKind.NotEqualsExpression => true,
+            // !(x == null), !(x != null)
+            PrefixUnaryExpressionSyntax { RawKind: (int)SyntaxKind.LogicalNotExpression } => true,
+            // (x == null) is false, (x != null) is true, is not true, is not false
+            IsPatternExpressionSyntax
+            {
+                Pattern: ConstantPatternSyntax
+                    {
+                        Expression.RawKind: (int)SyntaxKind.TrueLiteralExpression
+                            or (int)SyntaxKind.FalseLiteralExpression
+                    }
+                    or UnaryPatternSyntax
+                    {
+                        RawKind: (int)SyntaxKind.NotPattern,
+                        Pattern: ConstantPatternSyntax
+                        {
+                            Expression.RawKind: (int)SyntaxKind.TrueLiteralExpression
+                                or (int)SyntaxKind.FalseLiteralExpression
+                        }
+                    }
+            } => true,
+            _ => false,
+        };
     }
 
     private static bool IsConstantExpression(

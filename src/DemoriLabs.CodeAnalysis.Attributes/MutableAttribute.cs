@@ -6,7 +6,7 @@ namespace DemoriLabs.CodeAnalysis.Attributes;
 /// Marks a record, property, or primary constructor parameter as intentionally mutable,
 /// suppressing <c>DL1001</c>, <c>DL1002</c>, and <c>DL2003</c> diagnostics.
 /// </summary>
-[Conditional("DEMORILABS_DIAGNOSTICS_ATTRIBUTES")]
+[Conditional("DEMORILABS_CODE_ANALYSIS")]
 [AttributeUsage(
     AttributeTargets.Class | AttributeTargets.Struct | AttributeTargets.Property | AttributeTargets.Parameter
 )]

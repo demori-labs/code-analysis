@@ -347,4 +347,117 @@ public class NegationPatternAnalyzerTests
 
         await test.RunAsync();
     }
+
+    [Test]
+    public async Task NegatedEqualsNull_ReportsDiagnostic()
+    {
+        var test = CreateTest(
+            """
+            public class C
+            {
+                public void M(object? o)
+                {
+                    if ({|DL3004:!(o == null)|}) { }
+                }
+            }
+            """
+        );
+
+        await test.RunAsync();
+    }
+
+    [Test]
+    public async Task NegatedNotEqualsNull_ReportsDiagnostic()
+    {
+        var test = CreateTest(
+            """
+            public class C
+            {
+                public void M(object? o)
+                {
+                    if ({|DL3004:!(o != null)|}) { }
+                }
+            }
+            """
+        );
+
+        await test.RunAsync();
+    }
+
+    [Test]
+    public async Task NegatedHasValueStandalone_ReportsDiagnostic()
+    {
+        var test = CreateTest(
+            """
+            public class C
+            {
+                public void M(int? id)
+                {
+                    if ({|DL3004:!id.HasValue|}) { }
+                }
+            }
+            """
+        );
+
+        await test.RunAsync();
+    }
+
+    [Test]
+    public async Task ValueType_NegatedEqualsNull_ReportsDiagnostic()
+    {
+        var test = CreateTest(
+            """
+            public class C
+            {
+                public void M(int? id)
+                {
+                    if ({|DL3004:!(id == null)|}) { }
+                }
+            }
+            """
+        );
+
+        await test.RunAsync();
+    }
+
+    [Test]
+    public async Task HasValueNegationInLogicalOrChain_NoDiagnostic()
+    {
+        var test = CreateTest(
+            """
+            public class C
+            {
+                public int? M(int? id)
+                {
+                    if (!id.HasValue || id == 0)
+                        return null;
+                    return id;
+                }
+            }
+            """
+        );
+
+        await test.RunAsync();
+    }
+
+    [Test]
+    public async Task HasValueNegationWithValueAccessInAndChain_NoDiagnostic()
+    {
+        var test = CreateTest(
+            """
+            public class C
+            {
+                public void M(int? id)
+                {
+                    if (!id.HasValue || id.Value == 0)
+                    {
+                        return;
+                    }
+                }
+            }
+            """
+        );
+
+        await test.RunAsync();
+    }
 }

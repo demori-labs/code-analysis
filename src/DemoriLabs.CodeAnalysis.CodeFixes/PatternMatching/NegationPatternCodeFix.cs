@@ -51,6 +51,8 @@ public sealed class NegationPatternCodeFix : CodeFixProvider
         if (root is null || node is not PrefixUnaryExpressionSyntax prefixUnary)
             return document;
 
+        var semanticModel = await document.GetSemanticModelAsync(ct).ConfigureAwait(false);
+
         var operand = prefixUnary.Operand;
 
         var unwrapped = operand;
@@ -61,12 +63,19 @@ public sealed class NegationPatternCodeFix : CodeFixProvider
 
         switch (unwrapped)
         {
-            // !(x is SomePattern) → x is not SomePattern
+            // !(x is not Y) → x is Y, !(x is Y) → x is not Y
             case IsPatternExpressionSyntax isPattern:
             {
                 var expr = isPattern.Expression.WithoutTrivia().ToFullString();
-                var pattern = isPattern.Pattern.WithoutTrivia().ToFullString();
-                replacementText = $"{expr} is not {pattern}";
+                if (isPattern.Pattern is UnaryPatternSyntax { RawKind: (int)SyntaxKind.NotPattern } notPattern)
+                {
+                    replacementText = $"{expr} is {notPattern.Pattern.WithoutTrivia().ToFullString()}";
+                }
+                else
+                {
+                    replacementText = $"{expr} is not {isPattern.Pattern.WithoutTrivia().ToFullString()}";
+                }
+
                 break;
             }
 
@@ -76,6 +85,45 @@ public sealed class NegationPatternCodeFix : CodeFixProvider
                 var expr = isExpr.Left.WithoutTrivia().ToFullString();
                 var type = isExpr.Right.WithoutTrivia().ToFullString();
                 replacementText = $"{expr} is not {type}";
+                break;
+            }
+
+            // !(x == c) → x is not c, !(x != c) → x is c
+            case BinaryExpressionSyntax
+            {
+                RawKind: (int)SyntaxKind.EqualsExpression or (int)SyntaxKind.NotEqualsExpression,
+            } comparison:
+            {
+                var leftIsLiteral =
+                    comparison.Left
+                    is LiteralExpressionSyntax
+                        or PrefixUnaryExpressionSyntax
+                        {
+                            RawKind: (int)SyntaxKind.UnaryMinusExpression,
+                            Operand: LiteralExpressionSyntax
+                        }
+                        or MemberAccessExpressionSyntax;
+                var innerVariable = leftIsLiteral
+                    ? comparison.Right.WithoutTrivia().ToFullString()
+                    : comparison.Left.WithoutTrivia().ToFullString();
+                var innerConstant = leftIsLiteral
+                    ? comparison.Left.WithoutTrivia().ToFullString()
+                    : comparison.Right.WithoutTrivia().ToFullString();
+                var isEquality = comparison.IsKind(SyntaxKind.EqualsExpression);
+                replacementText = isEquality
+                    ? $"{innerVariable} is not {innerConstant}"
+                    : $"{innerVariable} is {innerConstant}";
+                break;
+            }
+
+            // !id.HasValue → id is null (when Nullable<T>)
+            case MemberAccessExpressionSyntax { Name.Identifier.Text: "HasValue" } hasValueAccess
+                when semanticModel is not null
+                    && semanticModel.GetTypeInfo(hasValueAccess.Expression, ct).Type?.OriginalDefinition.SpecialType
+                        is SpecialType.System_Nullable_T:
+            {
+                var ownerText = hasValueAccess.Expression.WithoutTrivia().ToFullString();
+                replacementText = $"{ownerText} is null";
                 break;
             }
 

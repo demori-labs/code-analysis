@@ -27,7 +27,7 @@ namespace DemoriLabs.CodeAnalysis.Attributes;
 /// The complexity score above which <c>DL4002</c> (warning) is reported instead of <c>DL4001</c>.
 /// Defaults to <c>15</c>.
 /// </param>
-[Conditional("DEMORILABS_DIAGNOSTICS_ATTRIBUTES")]
+[Conditional("DEMORILABS_CODE_ANALYSIS")]
 [AttributeUsage(AttributeTargets.Method | AttributeTargets.Class | AttributeTargets.Struct)]
 public sealed class CognitiveComplexityThresholdAttribute(int moderateThreshold = 7, int elevatedThreshold = 15)
     : Attribute

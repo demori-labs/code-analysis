@@ -13,7 +13,7 @@ namespace DemoriLabs.CodeAnalysis.CodeFixes.ReadOnlyParameter;
 public sealed class ReadOnlyIncompatibleModifierCodeFix : CodeFixProvider
 {
     /// <inheritdoc />
-    public override ImmutableArray<string> FixableDiagnosticIds => [RuleIdentifiers.ReadOnlyIncompatibleModifier];
+    public override ImmutableArray<string> FixableDiagnosticIds => [RuleIdentifiers.IncompatibleAttributeModifier];
 
     /// <inheritdoc />
     public override FixAllProvider GetFixAllProvider()

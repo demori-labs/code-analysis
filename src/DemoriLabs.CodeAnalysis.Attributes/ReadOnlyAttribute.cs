@@ -6,6 +6,6 @@ namespace DemoriLabs.CodeAnalysis.Attributes;
 /// Prevents reassignment of the annotated parameter within the method body.
 /// Triggers <c>DL2001</c> on any reassignment attempt.
 /// </summary>
-[Conditional("DEMORILABS_DIAGNOSTICS_ATTRIBUTES")]
+[Conditional("DEMORILABS_CODE_ANALYSIS")]
 [AttributeUsage(AttributeTargets.Parameter)]
 public sealed class ReadOnlyAttribute : Attribute;

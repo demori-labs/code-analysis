@@ -52,7 +52,7 @@ public sealed class LogicalPatternCodeFix : CodeFixProvider
             return document;
 
         var isOr = binaryExpression.IsKind(SyntaxKind.LogicalOrExpression);
-        var leaves = new List<BinaryExpressionSyntax>();
+        var leaves = new List<ExpressionSyntax>();
         FlattenChain(binaryExpression, binaryExpression.Kind(), leaves);
 
         if (leaves.Count < 2)
@@ -63,13 +63,9 @@ public sealed class LogicalPatternCodeFix : CodeFixProvider
         {
             replacementText = BuildOrReplacement(leaves);
         }
-        else if (AllLeavesAre(leaves, SyntaxKind.NotEqualsExpression))
-        {
-            replacementText = BuildNotEqualsReplacement(leaves);
-        }
         else
         {
-            replacementText = BuildRangeReplacement(leaves);
+            replacementText = BuildAndReplacement(leaves);
         }
 
         var replacement = SyntaxFactory
@@ -81,36 +77,53 @@ public sealed class LogicalPatternCodeFix : CodeFixProvider
         return document.WithSyntaxRoot(newRoot);
     }
 
-    private static string BuildOrReplacement(List<BinaryExpressionSyntax> leaves)
+    private static string BuildOrReplacement(List<ExpressionSyntax> leaves)
     {
         var variable = GetVariable(leaves[0]).WithoutTrivia().ToFullString();
-        var parts = new List<string>();
-        foreach (var leaf in leaves)
-        {
-            parts.Add(GetConstant(leaf));
-        }
-
+        var parts = leaves.Select(BuildOrPatternPart);
         return $"{variable} is {string.Join(" or ", parts)}";
     }
 
-    private static string BuildNotEqualsReplacement(List<BinaryExpressionSyntax> leaves)
+    private static string BuildOrPatternPart(ExpressionSyntax leaf)
+    {
+        if (leaf is PrefixUnaryExpressionSyntax)
+            return "null";
+
+        if (leaf is IsPatternExpressionSyntax isPattern)
+            return isPattern.Pattern.WithoutTrivia().ToString();
+
+        var comparison = (BinaryExpressionSyntax)leaf;
+
+        if (comparison.IsKind(SyntaxKind.EqualsExpression))
+            return GetConstant(comparison);
+
+        return BuildRelationalPattern(comparison);
+    }
+
+    private static string BuildAndReplacement(List<ExpressionSyntax> leaves)
     {
         var variable = GetVariable(leaves[0]).WithoutTrivia().ToFullString();
-        var parts = new List<string>();
-        foreach (var leaf in leaves)
-        {
-            parts.Add($"not {GetConstant(leaf)}");
-        }
-
+        var parts = leaves.Select(BuildAndPatternPart);
         return $"{variable} is {string.Join(" and ", parts)}";
     }
 
-    private static string BuildRangeReplacement(List<BinaryExpressionSyntax> leaves)
+    private static string BuildAndPatternPart(ExpressionSyntax leaf)
     {
-        var variable = GetVariable(leaves[0]).WithoutTrivia().ToFullString();
-        var part0 = BuildRelationalPattern(leaves[0]);
-        var part1 = BuildRelationalPattern(leaves[1]);
-        return $"{variable} is {part0} and {part1}";
+        if (leaf is MemberAccessExpressionSyntax)
+            return "not null";
+
+        if (leaf is PrefixUnaryExpressionSyntax)
+            return "null";
+
+        if (leaf is IsPatternExpressionSyntax isPattern)
+            return isPattern.Pattern.WithoutTrivia().ToString();
+
+        var comparison = (BinaryExpressionSyntax)leaf;
+
+        if (comparison.IsKind(SyntaxKind.NotEqualsExpression))
+            return $"not {GetConstant(comparison)}";
+
+        return BuildRelationalPattern(comparison);
     }
 
     private static string BuildRelationalPattern(BinaryExpressionSyntax comparison)
@@ -128,11 +141,7 @@ public sealed class LogicalPatternCodeFix : CodeFixProvider
         };
     }
 
-    private static void FlattenChain(
-        BinaryExpressionSyntax expression,
-        SyntaxKind kind,
-        List<BinaryExpressionSyntax> leaves
-    )
+    private static void FlattenChain(BinaryExpressionSyntax expression, SyntaxKind kind, List<ExpressionSyntax> leaves)
     {
         switch (expression.Left)
         {
@@ -142,19 +151,61 @@ public sealed class LogicalPatternCodeFix : CodeFixProvider
             case BinaryExpressionSyntax leftLeaf:
                 leaves.Add(leftLeaf);
                 break;
+            case PrefixUnaryExpressionSyntax leftNot when IsNegatedHasValue(leftNot):
+                leaves.Add(leftNot);
+                break;
+            case MemberAccessExpressionSyntax leftHasValue when IsHasValueAccess(leftHasValue):
+                leaves.Add(leftHasValue);
+                break;
+            case IsPatternExpressionSyntax leftIsPattern:
+                leaves.Add(leftIsPattern);
+                break;
         }
 
-        if (expression.Right is BinaryExpressionSyntax rightLeaf)
-            leaves.Add(rightLeaf);
+        switch (expression.Right)
+        {
+            case BinaryExpressionSyntax rightLeaf:
+                leaves.Add(rightLeaf);
+                break;
+            case PrefixUnaryExpressionSyntax rightNot when IsNegatedHasValue(rightNot):
+                leaves.Add(rightNot);
+                break;
+            case MemberAccessExpressionSyntax rightHasValue when IsHasValueAccess(rightHasValue):
+                leaves.Add(rightHasValue);
+                break;
+            case IsPatternExpressionSyntax rightIsPattern:
+                leaves.Add(rightIsPattern);
+                break;
+        }
     }
 
-    private static bool AllLeavesAre(List<BinaryExpressionSyntax> leaves, SyntaxKind kind)
+    private static bool IsNegatedHasValue(PrefixUnaryExpressionSyntax expr)
     {
-        return leaves.All(leaf => leaf.Kind() == kind);
+        return expr.IsKind(SyntaxKind.LogicalNotExpression)
+            && expr.Operand is MemberAccessExpressionSyntax memberAccess
+            && IsHasValueAccess(memberAccess);
     }
 
-    private static ExpressionSyntax GetVariable(BinaryExpressionSyntax comparison)
+    private static bool IsHasValueAccess(MemberAccessExpressionSyntax expr)
     {
+        return string.Equals(expr.Name.Identifier.Text, "HasValue", StringComparison.Ordinal);
+    }
+
+    private static ExpressionSyntax GetVariable(ExpressionSyntax leaf)
+    {
+        // !x.HasValue → x
+        if (leaf is PrefixUnaryExpressionSyntax { Operand: MemberAccessExpressionSyntax negatedAccess })
+            return negatedAccess.Expression;
+
+        // x.HasValue → x
+        if (leaf is MemberAccessExpressionSyntax hasValueAccess)
+            return hasValueAccess.Expression;
+
+        // x is not null → x
+        if (leaf is IsPatternExpressionSyntax isPattern)
+            return isPattern.Expression;
+
+        var comparison = (BinaryExpressionSyntax)leaf;
         return IsLiteralOrConstant(comparison.Right) ? comparison.Left : comparison.Right;
     }
 
