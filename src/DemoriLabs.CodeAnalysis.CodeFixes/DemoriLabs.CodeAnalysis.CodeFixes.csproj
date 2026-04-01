@@ -7,6 +7,10 @@
 
     <ItemGroup>
         <Compile Include="..\DemoriLabs.CodeAnalysis\RuleIdentifiers.cs" Link="RuleIdentifiers.cs" />
+        <Compile
+            Include="..\DemoriLabs.CodeAnalysis\PatternMatching\DefaultValueHelper.cs"
+            Link="PatternMatching\DefaultValueHelper.cs"
+        />
     </ItemGroup>
 
     <ItemGroup>

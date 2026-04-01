@@ -34,3 +34,4 @@ DL3015 | Style | Warning | NullConditionalAssignmentAnalyzer
 DL5001 | Performance | Warning | MultipleEnumerationAnalyzer
 DL3016 | Style | Warning | RedundantTypePatternAnalyzer
 DL2005 | Usage | Warning | UnusedParameterAnalyzer
+DL3017 | Style | Warning | UseStringEqualsAnalyzer

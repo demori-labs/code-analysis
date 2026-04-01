@@ -1,5 +1,6 @@
 using System.Collections.Immutable;
 using System.Composition;
+using DemoriLabs.CodeAnalysis.PatternMatching;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CodeActions;
 using Microsoft.CodeAnalysis.CodeFixes;
@@ -62,9 +63,16 @@ public sealed class ConstantPatternCodeFix : CodeFixProvider
 
         string replacementText;
 
-        if (node is IsPatternExpressionSyntax isPatternNode)
+        if (
+            node is IsPatternExpressionSyntax isPatternNode
+            && TryFixIsDefaultPattern(isPatternNode, semanticModel, ct, out var defaultFix)
+        )
         {
-            replacementText = FixIsTrueFalsePattern(isPatternNode, semanticModel, ct);
+            replacementText = defaultFix;
+        }
+        else if (node is IsPatternExpressionSyntax isTrueFalseNode)
+        {
+            replacementText = FixIsTrueFalsePattern(isTrueFalseNode, semanticModel, ct);
         }
         else if (node is BinaryExpressionSyntax binaryExpression)
         {
@@ -96,18 +104,56 @@ public sealed class ConstantPatternCodeFix : CodeFixProvider
                     Pattern: ConstantPatternSyntax
                         {
                             Expression.RawKind: (int)SyntaxKind.TrueLiteralExpression
-                                or (int)SyntaxKind.FalseLiteralExpression,
+                                or (int)SyntaxKind.FalseLiteralExpression
+                                or (int)SyntaxKind.DefaultLiteralExpression,
                         }
+                        or ConstantPatternSyntax { Expression: DefaultExpressionSyntax }
                         or UnaryPatternSyntax
                         {
                             RawKind: (int)SyntaxKind.NotPattern,
                             Pattern: ConstantPatternSyntax
-                            {
-                                Expression.RawKind: (int)SyntaxKind.TrueLiteralExpression
-                                    or (int)SyntaxKind.FalseLiteralExpression,
-                            },
+                                {
+                                    Expression.RawKind: (int)SyntaxKind.TrueLiteralExpression
+                                        or (int)SyntaxKind.FalseLiteralExpression
+                                        or (int)SyntaxKind.DefaultLiteralExpression,
+                                }
+                                or ConstantPatternSyntax { Expression: DefaultExpressionSyntax },
                         },
                 };
+    }
+
+    private static bool TryFixIsDefaultPattern(
+        IsPatternExpressionSyntax isPattern,
+        SemanticModel semanticModel,
+        CancellationToken ct,
+        out string replacement
+    )
+    {
+        replacement = "";
+
+        bool isNegated;
+        switch (isPattern.Pattern)
+        {
+            case ConstantPatternSyntax { Expression: var expr } when DefaultValueHelper.IsDefaultExpression(expr):
+                isNegated = false;
+                break;
+            case UnaryPatternSyntax
+            {
+                RawKind: (int)SyntaxKind.NotPattern,
+                Pattern: ConstantPatternSyntax { Expression: var expr },
+            } when DefaultValueHelper.IsDefaultExpression(expr):
+                isNegated = true;
+                break;
+            default:
+                return false;
+        }
+
+        var variableText = isPattern.Expression.WithoutTrivia().ToFullString();
+        var resolvedDefault = DefaultValueHelper.ResolveDefaultPatternText(isPattern.Expression, semanticModel, ct);
+
+        replacement = isNegated ? $"{variableText} is not {resolvedDefault}" : $"{variableText} is {resolvedDefault}";
+
+        return true;
     }
 
     private static string FixIsTrueFalsePattern(
@@ -351,7 +397,9 @@ public sealed class ConstantPatternCodeFix : CodeFixProvider
         }
 
         var variableText = variable.WithoutTrivia().ToFullString();
-        var constantText = constant.WithoutTrivia().ToFullString();
+        var constantText = DefaultValueHelper.IsDefaultExpression(constant)
+            ? DefaultValueHelper.ResolveDefaultPatternText(variable, semanticModel, ct)
+            : constant.WithoutTrivia().ToFullString();
 
         return isEquals ? $"{variableText} is {constantText}" : $"{variableText} is not {constantText}";
     }

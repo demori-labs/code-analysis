@@ -42,7 +42,11 @@ public sealed class ConstantPatternAnalyzer : DiagnosticAnalyzer
             );
 
             compilationContext.RegisterSyntaxNodeAction(
-                analysisContext => AnalyzeIsTrueFalsePattern(analysisContext, expressionType),
+                analysisContext =>
+                {
+                    AnalyzeIsTrueFalsePattern(analysisContext, expressionType);
+                    AnalyzeIsDefaultPattern(analysisContext, expressionType);
+                },
                 SyntaxKind.IsPatternExpression
             );
         });
@@ -107,7 +111,9 @@ public sealed class ConstantPatternAnalyzer : DiagnosticAnalyzer
         var isEquals = binaryExpression.IsKind(SyntaxKind.EqualsExpression);
         var variable = leftIsConstant ? right : left;
 
-        var constantText = constant.ToString();
+        var constantText = DefaultValueHelper.IsDefaultExpression(constant)
+            ? DefaultValueHelper.ResolveDefaultPatternText(variable, context.SemanticModel, context.CancellationToken)
+            : constant.ToString();
         var variableText = variable.ToString();
 
         var suggestion = isEquals ? $"{variableText} is {constantText}" : $"{variableText} is not {constantText}";
@@ -241,6 +247,54 @@ public sealed class ConstantPatternAnalyzer : DiagnosticAnalyzer
                 break;
             }
         }
+    }
+
+    private static void AnalyzeIsDefaultPattern(SyntaxNodeAnalysisContext context, INamedTypeSymbol? expressionType)
+    {
+        var isPattern = (IsPatternExpressionSyntax)context.Node;
+
+        bool isNegated;
+        switch (isPattern.Pattern)
+        {
+            case ConstantPatternSyntax { Expression: var expr } when DefaultValueHelper.IsDefaultExpression(expr):
+                isNegated = false;
+                break;
+            case UnaryPatternSyntax
+            {
+                RawKind: (int)SyntaxKind.NotPattern,
+                Pattern: ConstantPatternSyntax { Expression: var expr },
+            } when DefaultValueHelper.IsDefaultExpression(expr):
+                isNegated = true;
+                break;
+            default:
+                return;
+        }
+
+        if (
+            expressionType is not null
+            && ExpressionTreeHelper.IsInsideExpressionTree(
+                isPattern,
+                context.SemanticModel,
+                expressionType,
+                context.CancellationToken
+            )
+        )
+        {
+            return;
+        }
+
+        var variableText = isPattern.Expression.WithoutTrivia().ToFullString();
+        var resolvedDefault = DefaultValueHelper.ResolveDefaultPatternText(
+            isPattern.Expression,
+            context.SemanticModel,
+            context.CancellationToken
+        );
+
+        var suggestion = isNegated
+            ? $"{variableText} is not {resolvedDefault}"
+            : $"{variableText} is {resolvedDefault}";
+
+        context.ReportDiagnostic(Diagnostic.Create(Rule, isPattern.GetLocation(), suggestion, isPattern.ToString()));
     }
 
     private static string BuildComparisonSimplification(BinaryExpressionSyntax comparison, bool negate)

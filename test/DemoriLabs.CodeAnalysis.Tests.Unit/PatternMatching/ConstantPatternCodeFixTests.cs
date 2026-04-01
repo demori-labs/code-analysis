@@ -1372,4 +1372,390 @@ public class ConstantPatternCodeFixTests
 
         await test.RunAsync();
     }
+
+    [Test]
+    public async Task IntEqualsDefault_FixesToIsZero()
+    {
+        var test = CreateTest(
+            """
+            public class C
+            {
+                public void M(int x)
+                {
+                    if ({|DL3003:x == default|}) { }
+                }
+            }
+            """,
+            """
+            public class C
+            {
+                public void M(int x)
+                {
+                    if (x is 0) { }
+                }
+            }
+            """
+        );
+
+        await test.RunAsync();
+    }
+
+    [Test]
+    public async Task BoolEqualsDefault_FixesToIsFalse()
+    {
+        var test = CreateTest(
+            """
+            public class C
+            {
+                public void M(bool b)
+                {
+                    if ({|DL3003:b == default|}) { }
+                }
+            }
+            """,
+            """
+            public class C
+            {
+                public void M(bool b)
+                {
+                    if (b is false) { }
+                }
+            }
+            """
+        );
+
+        await test.RunAsync();
+    }
+
+    [Test]
+    public async Task EnumEqualsDefault_FixesToIsZero()
+    {
+        var test = CreateTest(
+            """
+            public enum Status { Active, Inactive }
+
+            public class C
+            {
+                public void M(Status s)
+                {
+                    if ({|DL3003:s == default|}) { }
+                }
+            }
+            """,
+            """
+            public enum Status { Active, Inactive }
+
+            public class C
+            {
+                public void M(Status s)
+                {
+                    if (s is 0) { }
+                }
+            }
+            """
+        );
+
+        await test.RunAsync();
+    }
+
+    [Test]
+    public async Task ObjectEqualsDefault_FixesToIsNull()
+    {
+        var test = CreateTest(
+            """
+            public class C
+            {
+                public void M(object? o)
+                {
+                    if ({|DL3003:o == default|}) { }
+                }
+            }
+            """,
+            """
+            public class C
+            {
+                public void M(object? o)
+                {
+                    if (o is null) { }
+                }
+            }
+            """
+        );
+
+        await test.RunAsync();
+    }
+
+    [Test]
+    public async Task NullableIntEqualsDefault_FixesToIsNull()
+    {
+        var test = CreateTest(
+            """
+            public class C
+            {
+                public void M(int? x)
+                {
+                    if ({|DL3003:x == default|}) { }
+                }
+            }
+            """,
+            """
+            public class C
+            {
+                public void M(int? x)
+                {
+                    if (x is null) { }
+                }
+            }
+            """
+        );
+
+        await test.RunAsync();
+    }
+
+    [Test]
+    public async Task IntNotEqualsDefault_FixesToIsNotZero()
+    {
+        var test = CreateTest(
+            """
+            public class C
+            {
+                public void M(int x)
+                {
+                    if ({|DL3003:x != default|}) { }
+                }
+            }
+            """,
+            """
+            public class C
+            {
+                public void M(int x)
+                {
+                    if (x is not 0) { }
+                }
+            }
+            """
+        );
+
+        await test.RunAsync();
+    }
+
+    [Test]
+    public async Task DoubleEqualsDefault_FixesToIsZero()
+    {
+        var test = CreateTest(
+            """
+            public class C
+            {
+                public void M(double d)
+                {
+                    if ({|DL3003:d == default|}) { }
+                }
+            }
+            """,
+            """
+            public class C
+            {
+                public void M(double d)
+                {
+                    if (d is 0) { }
+                }
+            }
+            """
+        );
+
+        await test.RunAsync();
+    }
+
+    [Test]
+    public async Task IntEqualsDefaultOfT_FixesToIsZero()
+    {
+        var test = CreateTest(
+            """
+            public class C
+            {
+                public void M(int x)
+                {
+                    if ({|DL3003:x == default(int)|}) { }
+                }
+            }
+            """,
+            """
+            public class C
+            {
+                public void M(int x)
+                {
+                    if (x is 0) { }
+                }
+            }
+            """
+        );
+
+        await test.RunAsync();
+    }
+
+    [Test]
+    public async Task ObjectEqualsDefaultOfT_FixesToIsNull()
+    {
+        var test = CreateTest(
+            """
+            public class C
+            {
+                public void M(object? o)
+                {
+                    if ({|DL3003:o == default(object)|}) { }
+                }
+            }
+            """,
+            """
+            public class C
+            {
+                public void M(object? o)
+                {
+                    if (o is null) { }
+                }
+            }
+            """
+        );
+
+        await test.RunAsync();
+    }
+
+    [Test]
+    public async Task IntIsDefaultOfT_FixesToIsZero()
+    {
+        var test = CreateTest(
+            """
+            public class C
+            {
+                public void M(int x)
+                {
+                    if ({|DL3003:x is default(int)|}) { }
+                }
+            }
+            """,
+            """
+            public class C
+            {
+                public void M(int x)
+                {
+                    if (x is 0) { }
+                }
+            }
+            """
+        );
+
+        await test.RunAsync();
+    }
+
+    [Test]
+    public async Task ObjectIsDefaultOfT_FixesToIsNull()
+    {
+        var test = CreateTest(
+            """
+            public class C
+            {
+                public void M(object? o)
+                {
+                    if ({|DL3003:o is default(object)|}) { }
+                }
+            }
+            """,
+            """
+            public class C
+            {
+                public void M(object? o)
+                {
+                    if (o is null) { }
+                }
+            }
+            """
+        );
+
+        await test.RunAsync();
+    }
+
+    [Test]
+    public async Task IntIsNotDefaultOfT_FixesToIsNotZero()
+    {
+        var test = CreateTest(
+            """
+            public class C
+            {
+                public void M(int x)
+                {
+                    if ({|DL3003:x is not default(int)|}) { }
+                }
+            }
+            """,
+            """
+            public class C
+            {
+                public void M(int x)
+                {
+                    if (x is not 0) { }
+                }
+            }
+            """
+        );
+
+        await test.RunAsync();
+    }
+
+    [Test]
+    public async Task BoolIsDefaultOfT_FixesToIsFalse()
+    {
+        var test = CreateTest(
+            """
+            public class C
+            {
+                public void M(bool b)
+                {
+                    if ({|DL3003:b is default(bool)|}) { }
+                }
+            }
+            """,
+            """
+            public class C
+            {
+                public void M(bool b)
+                {
+                    if (b is false) { }
+                }
+            }
+            """
+        );
+
+        await test.RunAsync();
+    }
+
+    [Test]
+    public async Task EnumIsDefaultOfT_FixesToIsZero()
+    {
+        var test = CreateTest(
+            """
+            public enum Status { Active, Inactive }
+
+            public class C
+            {
+                public void M(Status s)
+                {
+                    if ({|DL3003:s is default(Status)|}) { }
+                }
+            }
+            """,
+            """
+            public enum Status { Active, Inactive }
+
+            public class C
+            {
+                public void M(Status s)
+                {
+                    if (s is 0) { }
+                }
+            }
+            """
+        );
+
+        await test.RunAsync();
+    }
 }
