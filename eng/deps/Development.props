@@ -1,0 +1,8 @@
+<Project>
+    <ItemGroup>
+        <!-- Analyzers -->
+        <PackageVersion Include="SonarAnalyzer.CSharp" Version="10.20.0.135146" />
+        <PackageVersion Include="Microsoft.VisualStudio.Threading.Analyzers" Version="17.14.15" />
+        <PackageVersion Include="ReferenceTrimmer" Version="3.4.5" />
+    </ItemGroup>
+</Project>
