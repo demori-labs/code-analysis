@@ -1,6 +1,6 @@
 # DemoriLabs.CodeAnalysis
 
-[![License: MIT NON-AI](https://img.shields.io/badge/License-MIT%20NON--AI-blue)](LICENSE)
+[![License](https://img.shields.io/badge/License-Apache%202.0-blue)](LICENSE)
 [![NuGet](https://img.shields.io/nuget/v/DemoriLabs.CodeAnalysis)](https://www.nuget.org/packages/DemoriLabs.CodeAnalysis)
 
 An opinionated suite of Roslyn analysers and code fixes tailored for modern C#. By adopting a strict, minimal-configuration philosophy, this package minimises trivial decision-making and enforces straightforward, pragmatic C# idioms out of the box. Every rule is comprehensively documented with clear reasoning regarding its design choices and underlying trade-offs. The behaviour is intentionally rigid to guarantee architectural consistency; if a specific analyser does not suit your context, the primary recourse is simply to disable it.
@@ -71,10 +71,4 @@ See each rule's documentation for configuration options and attributes.
 
 ## Licence
 
-This project is distributed under the [MIT NON-AI Licence](LICENSE).
-
-For all practical intents, this operates exactly like the standard MIT licence. You have the freedom to use, modify, distribute, and commercialise the software. I genuinely want you to build useful things with it.
-
-There is, however, one firm condition: **this code must not be used to train, enhance, or develop any artificial intelligence or machine learning models**. This prohibition is comprehensive, covering direct training, inclusion in datasets, and any derivative ML applications. As an independent developer, I do not have a legal team to enforce this; I am simply relying on your professional integrity and basic courtesy to respect the boundary.
-
-Do note that because it restricts a specific field of endeavour, this isn't strictly an [OSI-approved](https://opensource.org/licenses) open-source licence. It is more accurately described as 'source-available'. The trade-off is straightforward: you keep all the usual freedoms you would expect from MIT, provided the source code is never ingested by an AI training pipeline.
+This project is licensed under the [Apache License 2.0](LICENSE).
