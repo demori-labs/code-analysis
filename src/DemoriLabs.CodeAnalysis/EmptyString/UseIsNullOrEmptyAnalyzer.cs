@@ -101,13 +101,13 @@ public sealed class UseIsNullOrEmptyAnalyzer : DiagnosticAnalyzer
             return;
         }
 
-        if (TryGetLengthReceiver(right, left, context.SemanticModel, context.CancellationToken, out receiver))
-        {
-            if (IsInsideExpressionTree(binary, context, expressionType))
-                return;
+        if (!TryGetLengthReceiver(right, left, context.SemanticModel, context.CancellationToken, out receiver))
+            return;
 
-            ReportDiagnostic(context, binary, receiver, binary.IsKind(SyntaxKind.NotEqualsExpression));
-        }
+        if (IsInsideExpressionTree(binary, context, expressionType))
+            return;
+
+        ReportDiagnostic(context, binary, receiver, binary.IsKind(SyntaxKind.NotEqualsExpression));
     }
 
     private static void AnalyzeIsPatternExpression(SyntaxNodeAnalysisContext context, INamedTypeSymbol? expressionType)
@@ -142,87 +142,83 @@ public sealed class UseIsNullOrEmptyAnalyzer : DiagnosticAnalyzer
             }
         }
 
-        // str is null or ""
-        if (
-            isPattern.Pattern
-                is BinaryPatternSyntax
-                {
-                    RawKind: (int)SyntaxKind.OrPattern,
-                    Left: ConstantPatternSyntax { Expression.RawKind: (int)SyntaxKind.NullLiteralExpression },
-                    Right: ConstantPatternSyntax { Expression: LiteralExpressionSyntax rightLiteral },
-                }
-            && IsEmptyStringLiteral(rightLiteral)
-        )
+        switch (isPattern.Pattern)
         {
-            if (IsInsideExpressionTree(isPattern, context, expressionType))
+            // str is null or ""
+            case BinaryPatternSyntax
+            {
+                RawKind: (int)SyntaxKind.OrPattern,
+                Left: ConstantPatternSyntax { Expression.RawKind: (int)SyntaxKind.NullLiteralExpression },
+                Right: ConstantPatternSyntax { Expression: LiteralExpressionSyntax rightLiteral },
+            } when IsEmptyStringLiteral(rightLiteral):
+            {
+                if (IsInsideExpressionTree(isPattern, context, expressionType))
+                    return;
+
+                var exprText = isPattern.Expression.WithoutTrivia().ToFullString();
+                ReportDiagnostic(context, isPattern, exprText, isNegated: false);
                 return;
-
-            var exprText = isPattern.Expression.WithoutTrivia().ToFullString();
-            ReportDiagnostic(context, isPattern, exprText, isNegated: false);
-            return;
-        }
-
-        // str is not null and not ""
-        if (
-            isPattern.Pattern
-                is BinaryPatternSyntax
-                {
-                    RawKind: (int)SyntaxKind.AndPattern,
-                    Left: UnaryPatternSyntax
-                    {
-                        RawKind: (int)SyntaxKind.NotPattern,
-                        Pattern: ConstantPatternSyntax { Expression.RawKind: (int)SyntaxKind.NullLiteralExpression },
-                    },
-                    Right: UnaryPatternSyntax
-                    {
-                        RawKind: (int)SyntaxKind.NotPattern,
-                        Pattern: ConstantPatternSyntax { Expression: LiteralExpressionSyntax andRightLiteral },
-                    },
-                }
-            && IsEmptyStringLiteral(andRightLiteral)
-        )
-        {
-            if (IsInsideExpressionTree(isPattern, context, expressionType))
-                return;
-
-            var exprText = isPattern.Expression.WithoutTrivia().ToFullString();
-            ReportDiagnostic(context, isPattern, exprText, isNegated: true);
-            return;
-        }
-
-        // str.Length is 0 / str.Length is not 0
-        if (
-            isPattern.Expression is MemberAccessExpressionSyntax { Name.Identifier.Text: "Length" } lengthAccess
-            && isPattern.Pattern is ConstantPatternSyntax { Expression: LiteralExpressionSyntax zeroLiteral }
-            && zeroLiteral.Token.ValueText is "0"
-            && IsStringType(context.SemanticModel.GetTypeInfo(lengthAccess.Expression, context.CancellationToken).Type)
-        )
-        {
-            if (IsInsideExpressionTree(isPattern, context, expressionType))
-                return;
-
-            var receiverText = lengthAccess.Expression.WithoutTrivia().ToFullString();
-            ReportDiagnostic(context, isPattern, receiverText, isNegated: false);
-            return;
-        }
-
-        if (
-            isPattern.Expression is MemberAccessExpressionSyntax { Name.Identifier.Text: "Length" } lengthAccess2
-            && isPattern.Pattern
-                is UnaryPatternSyntax
+            }
+            // str is not null and not ""
+            case BinaryPatternSyntax
+            {
+                RawKind: (int)SyntaxKind.AndPattern,
+                Left: UnaryPatternSyntax
                 {
                     RawKind: (int)SyntaxKind.NotPattern,
-                    Pattern: ConstantPatternSyntax { Expression: LiteralExpressionSyntax zeroLiteral2 },
-                }
-            && zeroLiteral2.Token.ValueText is "0"
-            && IsStringType(context.SemanticModel.GetTypeInfo(lengthAccess2.Expression, context.CancellationToken).Type)
-        )
-        {
-            if (IsInsideExpressionTree(isPattern, context, expressionType))
-                return;
+                    Pattern: ConstantPatternSyntax { Expression.RawKind: (int)SyntaxKind.NullLiteralExpression },
+                },
+                Right: UnaryPatternSyntax
+                {
+                    RawKind: (int)SyntaxKind.NotPattern,
+                    Pattern: ConstantPatternSyntax { Expression: LiteralExpressionSyntax andRightLiteral },
+                },
+            } when IsEmptyStringLiteral(andRightLiteral):
+            {
+                if (IsInsideExpressionTree(isPattern, context, expressionType))
+                    return;
 
-            var receiverText = lengthAccess2.Expression.WithoutTrivia().ToFullString();
-            ReportDiagnostic(context, isPattern, receiverText, isNegated: true);
+                var exprText = isPattern.Expression.WithoutTrivia().ToFullString();
+                ReportDiagnostic(context, isPattern, exprText, isNegated: true);
+                return;
+            }
+        }
+
+        switch (isPattern.Expression)
+        {
+            // str.Length is 0 / str.Length is not 0
+            case MemberAccessExpressionSyntax { Name.Identifier.Text: "Length" } lengthAccess
+                when isPattern.Pattern
+                    is ConstantPatternSyntax { Expression: LiteralExpressionSyntax { Token.ValueText: "0" } }
+                    && IsStringType(
+                        context.SemanticModel.GetTypeInfo(lengthAccess.Expression, context.CancellationToken).Type
+                    ):
+            {
+                if (IsInsideExpressionTree(isPattern, context, expressionType))
+                    return;
+
+                var receiverText = lengthAccess.Expression.WithoutTrivia().ToFullString();
+                ReportDiagnostic(context, isPattern, receiverText, isNegated: false);
+                return;
+            }
+            case MemberAccessExpressionSyntax { Name.Identifier.Text: "Length" } lengthAccess2
+                when isPattern.Pattern
+                    is UnaryPatternSyntax
+                    {
+                        RawKind: (int)SyntaxKind.NotPattern,
+                        Pattern: ConstantPatternSyntax { Expression: LiteralExpressionSyntax { Token.ValueText: "0" } },
+                    }
+                    && IsStringType(
+                        context.SemanticModel.GetTypeInfo(lengthAccess2.Expression, context.CancellationToken).Type
+                    ):
+            {
+                if (IsInsideExpressionTree(isPattern, context, expressionType))
+                    return;
+
+                var receiverText = lengthAccess2.Expression.WithoutTrivia().ToFullString();
+                ReportDiagnostic(context, isPattern, receiverText, isNegated: true);
+                break;
+            }
         }
     }
 
@@ -242,7 +238,7 @@ public sealed class UseIsNullOrEmptyAnalyzer : DiagnosticAnalyzer
             return;
 
         if (
-            string.Equals(method.Name, "Equals", System.StringComparison.Ordinal) is false
+            string.Equals(method.Name, "Equals", StringComparison.Ordinal) is false
             || method.ContainingType?.SpecialType is not SpecialType.System_String
         )
         {
@@ -302,14 +298,12 @@ public sealed class UseIsNullOrEmptyAnalyzer : DiagnosticAnalyzer
         if (expression is LiteralExpressionSyntax literal && IsEmptyStringLiteral(literal))
             return true;
 
-        if (stringEmptyField is not null && expression is MemberAccessExpressionSyntax)
-        {
-            var symbol = semanticModel.GetSymbolInfo(expression, ct).Symbol;
-            if (symbol is not null && SymbolEqualityComparer.Default.Equals(symbol, stringEmptyField))
-                return true;
-        }
+        if (stringEmptyField is null || expression is not MemberAccessExpressionSyntax)
+            return false;
 
-        return false;
+        var symbol = semanticModel.GetSymbolInfo(expression, ct).Symbol;
+
+        return symbol is not null && SymbolEqualityComparer.Default.Equals(symbol, stringEmptyField);
     }
 
     private static bool IsEmptyStringLiteral(LiteralExpressionSyntax literal)
@@ -332,21 +326,16 @@ public sealed class UseIsNullOrEmptyAnalyzer : DiagnosticAnalyzer
             return false;
 
         // str.Length or str?.Length
-        ExpressionSyntax? actualReceiver = null;
 
-        if (lengthSide is MemberAccessExpressionSyntax { Name.Identifier.Text: "Length" } memberAccess)
+        var actualReceiver = lengthSide switch
         {
-            actualReceiver = memberAccess.Expression;
-        }
-        else if (
-            lengthSide is ConditionalAccessExpressionSyntax
+            MemberAccessExpressionSyntax { Name.Identifier.Text: "Length" } memberAccess => memberAccess.Expression,
+            ConditionalAccessExpressionSyntax
             {
                 WhenNotNull: MemberBindingExpressionSyntax { Name.Identifier.Text: "Length" },
-            } conditionalAccess
-        )
-        {
-            actualReceiver = conditionalAccess.Expression;
-        }
+            } conditionalAccess => conditionalAccess.Expression,
+            _ => null,
+        };
 
         if (actualReceiver is null)
             return false;

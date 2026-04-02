@@ -97,7 +97,7 @@ public sealed class UsePrimaryConstructorCodeFix : CodeFixProvider
             .OfType<ConstructorDeclarationSyntax>()
             .FirstOrDefault(c => c.Identifier.Text == constructorDecl.Identifier.Text);
 
-        if (currentConstructor is null || currentConstructor.Parent is not TypeDeclarationSyntax currentTypeDecl)
+        if (currentConstructor?.Parent is not TypeDeclarationSyntax currentTypeDecl)
             return currentSolution;
 
         var currentMemberMap = BuildMemberToParameterMap(currentConstructor, currentSemanticModel, ct);
@@ -157,54 +157,55 @@ public sealed class UsePrimaryConstructorCodeFix : CodeFixProvider
         var finalMembers = new SyntaxList<MemberDeclarationSyntax>();
         foreach (var member in membersWithoutConstructor)
         {
-            if (member is FieldDeclarationSyntax fieldDecl)
+            switch (member)
             {
-                var newVariables = new List<VariableDeclaratorSyntax>();
-                var skipEntireField = true;
-
-                foreach (var variable in fieldDecl.Declaration.Variables)
+                case FieldDeclarationSyntax fieldDecl:
                 {
-                    if (fieldsToRemove.Contains(variable.Identifier.Text))
+                    var newVariables = new List<VariableDeclaratorSyntax>();
+                    var skipEntireField = true;
+
+                    foreach (var variable in fieldDecl.Declaration.Variables)
+                    {
+                        if (fieldsToRemove.Contains(variable.Identifier.Text))
+                            continue;
+
+                        if (nonPrivateFieldToParam.TryGetValue(variable.Identifier.Text, out var paramName))
+                        {
+                            newVariables.Add(
+                                variable.WithInitializer(
+                                    SyntaxFactory.EqualsValueClause(SyntaxFactory.IdentifierName(paramName))
+                                )
+                            );
+                            skipEntireField = false;
+                        }
+                        else
+                        {
+                            newVariables.Add(variable);
+                            skipEntireField = false;
+                        }
+                    }
+
+                    if (skipEntireField)
                         continue;
 
-                    if (nonPrivateFieldToParam.TryGetValue(variable.Identifier.Text, out var paramName))
-                    {
-                        newVariables.Add(
-                            variable.WithInitializer(
-                                SyntaxFactory.EqualsValueClause(SyntaxFactory.IdentifierName(paramName))
-                            )
-                        );
-                        skipEntireField = false;
-                    }
-                    else
-                    {
-                        newVariables.Add(variable);
-                        skipEntireField = false;
-                    }
-                }
-
-                if (skipEntireField)
+                    var newDeclaration = fieldDecl.Declaration.WithVariables(SyntaxFactory.SeparatedList(newVariables));
+                    finalMembers = finalMembers.Add(fieldDecl.WithDeclaration(newDeclaration));
                     continue;
-
-                var newDeclaration = fieldDecl.Declaration.WithVariables(SyntaxFactory.SeparatedList(newVariables));
-                finalMembers = finalMembers.Add(fieldDecl.WithDeclaration(newDeclaration));
-                continue;
+                }
+                case PropertyDeclarationSyntax propDecl
+                    when propertyToParam.TryGetValue(propDecl.Identifier.Text, out var propParamName):
+                    finalMembers = finalMembers.Add(
+                        propDecl
+                            .WithInitializer(
+                                SyntaxFactory.EqualsValueClause(SyntaxFactory.IdentifierName(propParamName))
+                            )
+                            .WithSemicolonToken(SyntaxFactory.Token(SyntaxKind.SemicolonToken))
+                    );
+                    continue;
+                default:
+                    finalMembers = finalMembers.Add(member);
+                    break;
             }
-
-            if (
-                member is PropertyDeclarationSyntax propDecl
-                && propertyToParam.TryGetValue(propDecl.Identifier.Text, out var propParamName)
-            )
-            {
-                finalMembers = finalMembers.Add(
-                    propDecl
-                        .WithInitializer(SyntaxFactory.EqualsValueClause(SyntaxFactory.IdentifierName(propParamName)))
-                        .WithSemicolonToken(SyntaxFactory.Token(SyntaxKind.SemicolonToken))
-                );
-                continue;
-            }
-
-            finalMembers = finalMembers.Add(member);
         }
 
         if (finalMembers.Count > 0)

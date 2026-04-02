@@ -63,24 +63,20 @@ public sealed class ConstantPatternCodeFix : CodeFixProvider
 
         string replacementText;
 
-        if (
-            node is IsPatternExpressionSyntax isPatternNode
-            && TryFixIsDefaultPattern(isPatternNode, semanticModel, ct, out var defaultFix)
-        )
+        switch (node)
         {
-            replacementText = defaultFix;
-        }
-        else if (node is IsPatternExpressionSyntax isTrueFalseNode)
-        {
-            replacementText = FixIsTrueFalsePattern(isTrueFalseNode, semanticModel, ct);
-        }
-        else if (node is BinaryExpressionSyntax binaryExpression)
-        {
-            replacementText = FixBinaryExpression(binaryExpression, semanticModel, ct);
-        }
-        else
-        {
-            return document;
+            case IsPatternExpressionSyntax isPatternNode
+                when TryFixIsDefaultPattern(isPatternNode, semanticModel, ct, out var defaultFix):
+                replacementText = defaultFix;
+                break;
+            case IsPatternExpressionSyntax isTrueFalseNode:
+                replacementText = FixIsTrueFalsePattern(isTrueFalseNode, semanticModel, ct);
+                break;
+            case BinaryExpressionSyntax binaryExpression:
+                replacementText = FixBinaryExpression(binaryExpression, semanticModel, ct);
+                break;
+            default:
+                return document;
         }
 
         var replacement = SyntaxFactory
@@ -134,14 +130,14 @@ public sealed class ConstantPatternCodeFix : CodeFixProvider
         bool isNegated;
         switch (isPattern.Pattern)
         {
-            case ConstantPatternSyntax { Expression: var expr } when DefaultValueHelper.IsDefaultExpression(expr):
+            case ConstantPatternSyntax { Expression: var expr } when DefaultPatternResolver.IsDefaultExpression(expr):
                 isNegated = false;
                 break;
             case UnaryPatternSyntax
             {
                 RawKind: (int)SyntaxKind.NotPattern,
                 Pattern: ConstantPatternSyntax { Expression: var expr },
-            } when DefaultValueHelper.IsDefaultExpression(expr):
+            } when DefaultPatternResolver.IsDefaultExpression(expr):
                 isNegated = true;
                 break;
             default:
@@ -149,7 +145,7 @@ public sealed class ConstantPatternCodeFix : CodeFixProvider
         }
 
         var variableText = isPattern.Expression.WithoutTrivia().ToFullString();
-        var resolvedDefault = DefaultValueHelper.ResolveDefaultPatternText(isPattern.Expression, semanticModel, ct);
+        var resolvedDefault = DefaultPatternResolver.ResolveDefaultPatternText(isPattern.Expression, semanticModel, ct);
 
         replacement = isNegated ? $"{variableText} is not {resolvedDefault}" : $"{variableText} is {resolvedDefault}";
 
@@ -347,17 +343,15 @@ public sealed class ConstantPatternCodeFix : CodeFixProvider
 
         var expr = isPattern.Expression.WithoutTrivia().ToFullString();
 
-        if (negate)
-        {
-            if (isPattern.Pattern is UnaryPatternSyntax { RawKind: (int)SyntaxKind.NotPattern } notPattern)
-            {
-                return $"{expr} is {notPattern.Pattern.WithoutTrivia().ToFullString()}";
-            }
+        if (!negate)
+            return $"{expr} is {isPattern.Pattern.WithoutTrivia().ToFullString()}";
 
-            return $"{expr} is not {isPattern.Pattern.WithoutTrivia().ToFullString()}";
+        if (isPattern.Pattern is UnaryPatternSyntax { RawKind: (int)SyntaxKind.NotPattern } notPattern)
+        {
+            return $"{expr} is {notPattern.Pattern.WithoutTrivia().ToFullString()}";
         }
 
-        return $"{expr} is {isPattern.Pattern.WithoutTrivia().ToFullString()}";
+        return $"{expr} is not {isPattern.Pattern.WithoutTrivia().ToFullString()}";
     }
 
     private static string FixBinaryExpression(
@@ -397,8 +391,8 @@ public sealed class ConstantPatternCodeFix : CodeFixProvider
         }
 
         var variableText = variable.WithoutTrivia().ToFullString();
-        var constantText = DefaultValueHelper.IsDefaultExpression(constant)
-            ? DefaultValueHelper.ResolveDefaultPatternText(variable, semanticModel, ct)
+        var constantText = DefaultPatternResolver.IsDefaultExpression(constant)
+            ? DefaultPatternResolver.ResolveDefaultPatternText(variable, semanticModel, ct)
             : constant.WithoutTrivia().ToFullString();
 
         return isEquals ? $"{variableText} is {constantText}" : $"{variableText} is not {constantText}";
@@ -523,7 +517,7 @@ public sealed class ConstantPatternCodeFix : CodeFixProvider
                 or PrefixUnaryExpressionSyntax
                 {
                     RawKind: (int)SyntaxKind.UnaryMinusExpression,
-                    Operand: LiteralExpressionSyntax
+                    Operand: LiteralExpressionSyntax,
                 }
                 or MemberAccessExpressionSyntax;
         var innerRightIsLiteral =
@@ -532,7 +526,7 @@ public sealed class ConstantPatternCodeFix : CodeFixProvider
                 or PrefixUnaryExpressionSyntax
                 {
                     RawKind: (int)SyntaxKind.UnaryMinusExpression,
-                    Operand: LiteralExpressionSyntax
+                    Operand: LiteralExpressionSyntax,
                 }
                 or MemberAccessExpressionSyntax;
 
@@ -582,7 +576,7 @@ public sealed class ConstantPatternCodeFix : CodeFixProvider
             case PrefixUnaryExpressionSyntax
             {
                 RawKind: (int)SyntaxKind.UnaryMinusExpression,
-                Operand: LiteralExpressionSyntax
+                Operand: LiteralExpressionSyntax,
             }:
                 return true;
             default:

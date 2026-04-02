@@ -100,7 +100,7 @@ public sealed class NegationPatternCodeFix : CodeFixProvider
                         or PrefixUnaryExpressionSyntax
                         {
                             RawKind: (int)SyntaxKind.UnaryMinusExpression,
-                            Operand: LiteralExpressionSyntax
+                            Operand: LiteralExpressionSyntax,
                         }
                         or MemberAccessExpressionSyntax;
                 var innerVariable = leftIsLiteral

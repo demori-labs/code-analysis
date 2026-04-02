@@ -377,85 +377,22 @@ public sealed class LogicalPatternAnalyzer : DiagnosticAnalyzer
 
     private static string BuildOrPatternPart(ExpressionSyntax leaf)
     {
-        if (leaf is PrefixUnaryExpressionSyntax)
-            return "null";
-
-        if (leaf is IsPatternExpressionSyntax isPattern)
-            return isPattern.Pattern.WithoutTrivia().ToString();
-
-        var comparison = (BinaryExpressionSyntax)leaf;
-
-        if (comparison.IsKind(SyntaxKind.EqualsExpression))
-            return GetConstant(comparison);
-
-        return BuildRelationalPattern(comparison);
-    }
-
-    private static bool AllLeavesAreEquality(List<ExpressionSyntax> leaves, SyntaxKind kind)
-    {
-        foreach (var leaf in leaves)
+        return leaf switch
         {
-            // !x.HasValue counts as equality against null (for || chains)
-            if (leaf is PrefixUnaryExpressionSyntax prefixUnary && IsNegatedHasValue(prefixUnary))
-            {
-                if (kind is not SyntaxKind.EqualsExpression)
-                    return false;
-                continue;
-            }
-
-            // x.HasValue counts as inequality against null (for && chains)
-            if (leaf is MemberAccessExpressionSyntax memberAccess && IsHasValueAccess(memberAccess))
-            {
-                if (kind is not SyntaxKind.NotEqualsExpression)
-                    return false;
-                continue;
-            }
-
-            if (leaf is not BinaryExpressionSyntax binary)
-                return false;
-
-            if (binary.Kind() != kind)
-                return false;
-
-            if (HasConstantOperand(binary) is false)
-                return false;
-
-            if (HasStringLiteralOperand(binary))
-                return false;
-        }
-
-        return true;
+            PrefixUnaryExpressionSyntax => "null",
+            IsPatternExpressionSyntax isPattern => isPattern.Pattern.WithoutTrivia().ToString(),
+            BinaryExpressionSyntax comparison when comparison.IsKind(SyntaxKind.EqualsExpression) => GetConstant(
+                comparison
+            ),
+            BinaryExpressionSyntax comparison => BuildRelationalPattern(comparison),
+            _ => throw new InvalidOperationException($"Unexpected leaf type: {leaf.GetType().Name}"),
+        };
     }
 
     private static bool HasStringLiteralOperand(BinaryExpressionSyntax expr)
     {
         return expr.Left is LiteralExpressionSyntax { RawKind: (int)SyntaxKind.StringLiteralExpression }
             || expr.Right is LiteralExpressionSyntax { RawKind: (int)SyntaxKind.StringLiteralExpression };
-    }
-
-    private static bool AllLeavesAreRelational(List<ExpressionSyntax> leaves)
-    {
-        foreach (var leaf in leaves)
-        {
-            if (leaf is not BinaryExpressionSyntax binary)
-                return false;
-
-            if (
-                binary.Kind()
-                is not SyntaxKind.LessThanExpression
-                    and not SyntaxKind.LessThanOrEqualExpression
-                    and not SyntaxKind.GreaterThanExpression
-                    and not SyntaxKind.GreaterThanOrEqualExpression
-            )
-            {
-                return false;
-            }
-
-            if (HasConstantOperand(binary) is false)
-                return false;
-        }
-
-        return true;
     }
 
     private static bool HasConstantOperand(BinaryExpressionSyntax expr)
@@ -530,20 +467,18 @@ public sealed class LogicalPatternAnalyzer : DiagnosticAnalyzer
 
     private static ExpressionSyntax GetVariable(ExpressionSyntax leaf)
     {
-        // !x.HasValue → variable is x
-        if (leaf is PrefixUnaryExpressionSyntax { Operand: MemberAccessExpressionSyntax negatedAccess })
-            return negatedAccess.Expression;
-
-        // x.HasValue → variable is x
-        if (leaf is MemberAccessExpressionSyntax hasValueAccess && IsHasValueAccess(hasValueAccess))
-            return hasValueAccess.Expression;
-
-        // x is not null → variable is x
-        if (leaf is IsPatternExpressionSyntax isPattern)
-            return isPattern.Expression;
-
-        var comparison = (BinaryExpressionSyntax)leaf;
-        return IsLiteralOrConstant(comparison.Right) ? comparison.Left : comparison.Right;
+        return leaf switch
+        {
+            PrefixUnaryExpressionSyntax { Operand: MemberAccessExpressionSyntax negatedAccess } =>
+                negatedAccess.Expression,
+            MemberAccessExpressionSyntax hasValueAccess when IsHasValueAccess(hasValueAccess) =>
+                hasValueAccess.Expression,
+            IsPatternExpressionSyntax isPattern => isPattern.Expression,
+            BinaryExpressionSyntax comparison => IsLiteralOrConstant(comparison.Right)
+                ? comparison.Left
+                : comparison.Right,
+            _ => throw new InvalidOperationException($"Unexpected leaf type: {leaf.GetType().Name}"),
+        };
     }
 
     private static string GetConstant(ExpressionSyntax leaf)
@@ -555,11 +490,6 @@ public sealed class LogicalPatternAnalyzer : DiagnosticAnalyzer
         var comparison = (BinaryExpressionSyntax)leaf;
         var constant = IsLiteralOrConstant(comparison.Right) ? comparison.Right : comparison.Left;
         return constant.WithoutTrivia().ToString();
-    }
-
-    private static IEnumerable<string> GetConstants(List<ExpressionSyntax> leaves)
-    {
-        return leaves.Select(GetConstant);
     }
 
     private static string BuildRelationalPattern(BinaryExpressionSyntax comparison)

@@ -4,7 +4,7 @@ using Microsoft.CodeAnalysis.CSharp.Syntax;
 
 namespace DemoriLabs.CodeAnalysis.PatternMatching;
 
-internal static class DefaultValueHelper
+internal static class DefaultPatternResolver
 {
     internal static bool IsDefaultExpression(ExpressionSyntax expression)
     {

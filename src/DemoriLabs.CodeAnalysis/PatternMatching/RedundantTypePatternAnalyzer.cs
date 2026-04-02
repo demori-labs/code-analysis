@@ -60,15 +60,20 @@ public sealed class RedundantTypePatternAnalyzer : DiagnosticAnalyzer
         var checkedTypeSymbol = context.SemanticModel.GetTypeInfo(checkedTypeSyntax, context.CancellationToken).Type;
 
         if (
-            IsRedundant(exprTypeInfo, checkedTypeSymbol, context.SemanticModel.Compilation, isDeclarationPattern: false)
+            !IsRedundant(
+                exprTypeInfo,
+                checkedTypeSymbol,
+                context.SemanticModel.Compilation,
+                isDeclarationPattern: false
+            )
         )
         {
-            var checkedTypeName = checkedTypeSyntax.ToString();
-            var exprTypeName = exprTypeInfo.Type!.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat);
-            context.ReportDiagnostic(
-                Diagnostic.Create(Rule, isExpression.GetLocation(), checkedTypeName, exprTypeName)
-            );
+            return;
         }
+
+        var checkedTypeName = checkedTypeSyntax.ToString();
+        var exprTypeName = exprTypeInfo.Type!.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat);
+        context.ReportDiagnostic(Diagnostic.Create(Rule, isExpression.GetLocation(), checkedTypeName, exprTypeName));
     }
 
     private static void AnalyzeIsPatternExpression(SyntaxNodeAnalysisContext context, INamedTypeSymbol? expressionType)
@@ -88,12 +93,16 @@ public sealed class RedundantTypePatternAnalyzer : DiagnosticAnalyzer
             context.SemanticModel.GetSymbolInfo(declarationPattern.Type, context.CancellationToken).Symbol
             as ITypeSymbol;
 
-        if (IsRedundant(exprTypeInfo, checkedTypeSymbol, context.SemanticModel.Compilation, isDeclarationPattern: true))
+        if (
+            !IsRedundant(exprTypeInfo, checkedTypeSymbol, context.SemanticModel.Compilation, isDeclarationPattern: true)
+        )
         {
-            var checkedTypeName = declarationPattern.Type.ToString();
-            var exprTypeName = exprTypeInfo.Type!.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat);
-            context.ReportDiagnostic(Diagnostic.Create(Rule, isPattern.GetLocation(), checkedTypeName, exprTypeName));
+            return;
         }
+
+        var checkedTypeName = declarationPattern.Type.ToString();
+        var exprTypeName = exprTypeInfo.Type!.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat);
+        context.ReportDiagnostic(Diagnostic.Create(Rule, isPattern.GetLocation(), checkedTypeName, exprTypeName));
     }
 
     private static bool IsRedundant(
@@ -108,7 +117,7 @@ public sealed class RedundantTypePatternAnalyzer : DiagnosticAnalyzer
             return false;
 
         var conversion = compilation.ClassifyConversion(exprType, checkedTypeSymbol);
-        if (conversion.IsIdentity is false && (conversion.IsImplicit && conversion.IsReference) is false)
+        if (conversion.IsIdentity is false && conversion is { IsImplicit: true, IsReference: true } is false)
             return false;
 
         var flowState = exprTypeInfo.Nullability.FlowState;
@@ -116,15 +125,12 @@ public sealed class RedundantTypePatternAnalyzer : DiagnosticAnalyzer
         if (exprType.IsValueType)
             return true;
 
-        // NRT not active for this code — skip reference types
-        if (flowState is NullableFlowState.None)
-            return false;
-
-        // Nullable reference: is Type variable is the correct idiom, don't flag
-        if (flowState is NullableFlowState.MaybeNull && isDeclarationPattern)
-            return false;
-
-        return true;
+        return flowState switch
+        {
+            NullableFlowState.None => false,
+            NullableFlowState.MaybeNull when isDeclarationPattern => false,
+            _ => true,
+        };
     }
 
     private static bool ShouldSkipExpressionTree(

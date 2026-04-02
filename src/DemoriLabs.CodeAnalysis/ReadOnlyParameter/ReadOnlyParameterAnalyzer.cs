@@ -161,23 +161,19 @@ public sealed class ReadOnlyParameterAnalyzer : DiagnosticAnalyzer
                 _ => null,
             };
 
-            if (incompatibleKind is not null)
+            if (incompatibleKind is null)
+                return;
+
+            var mutableAttr = FindMutableAttributeSyntax(parameter, context.SemanticModel, context.CancellationToken);
+            if (mutableAttr is not null)
             {
-                var mutableAttr = FindMutableAttributeSyntax(
-                    parameter,
-                    context.SemanticModel,
-                    context.CancellationToken
+                context.ReportDiagnostic(
+                    Diagnostic.Create(
+                        IncompatibleModifierRule,
+                        mutableAttr.GetLocation(),
+                        $"[Mutable] cannot be applied to a {incompatibleKind} parameter — record parameters generate properties, not fields"
+                    )
                 );
-                if (mutableAttr is not null)
-                {
-                    context.ReportDiagnostic(
-                        Diagnostic.Create(
-                            IncompatibleModifierRule,
-                            mutableAttr.GetLocation(),
-                            $"[Mutable] cannot be applied to a {incompatibleKind} parameter — record parameters generate properties, not fields"
-                        )
-                    );
-                }
             }
         }
     }

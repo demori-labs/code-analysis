@@ -48,7 +48,7 @@ public sealed class UnusedParameterAnalyzer : DiagnosticAnalyzer
             _ => (default, null),
         };
 
-        if (body is null || parameters.Count == 0)
+        if (body is null || parameters.Count is 0)
             return;
 
         if (
@@ -63,7 +63,7 @@ public sealed class UnusedParameterAnalyzer : DiagnosticAnalyzer
             return;
 
         var candidates = CollectCandidates(methodSymbol);
-        if (candidates.Count == 0)
+        if (candidates.Count is 0)
             return;
 
         var bodyOperation = context.SemanticModel.GetOperation(body, context.CancellationToken);
@@ -72,12 +72,12 @@ public sealed class UnusedParameterAnalyzer : DiagnosticAnalyzer
 
         foreach (var operation in bodyOperation.Descendants())
         {
-            if (operation is IParameterReferenceOperation paramRef)
-            {
-                candidates.Remove(paramRef.Parameter);
-                if (candidates.Count == 0)
-                    return;
-            }
+            if (operation is not IParameterReferenceOperation paramRef)
+                continue;
+
+            candidates.Remove(paramRef.Parameter);
+            if (candidates.Count is 0)
+                return;
         }
 
         foreach (var param in candidates)
@@ -97,13 +97,7 @@ public sealed class UnusedParameterAnalyzer : DiagnosticAnalyzer
         if (IsImplicitInterfaceImplementation(method))
             return true;
 
-        if (IsEntryPoint(method))
-            return true;
-
-        if (IsEventHandlerSignature(method))
-            return true;
-
-        return false;
+        return IsEntryPoint(method) || IsEventHandlerSignature(method);
     }
 
     private static bool IsImplicitInterfaceImplementation(IMethodSymbol method)
@@ -130,7 +124,7 @@ public sealed class UnusedParameterAnalyzer : DiagnosticAnalyzer
 
     private static bool IsEntryPoint(IMethodSymbol method)
     {
-        return method.IsStatic && string.Equals(method.Name, "Main", System.StringComparison.Ordinal);
+        return method.IsStatic && string.Equals(method.Name, "Main", StringComparison.Ordinal);
     }
 
     private static bool IsEventHandlerSignature(IMethodSymbol method)
@@ -150,12 +144,8 @@ public sealed class UnusedParameterAnalyzer : DiagnosticAnalyzer
         while (current is not null)
         {
             if (
-                string.Equals(current.Name, "EventArgs", System.StringComparison.Ordinal)
-                && string.Equals(
-                    current.ContainingNamespace?.ToDisplayString(),
-                    "System",
-                    System.StringComparison.Ordinal
-                )
+                string.Equals(current.Name, "EventArgs", StringComparison.Ordinal)
+                && string.Equals(current.ContainingNamespace?.ToDisplayString(), "System", StringComparison.Ordinal)
             )
             {
                 return true;

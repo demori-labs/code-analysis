@@ -58,15 +58,7 @@ public sealed class LogicalPatternCodeFix : CodeFixProvider
         if (leaves.Count < 2)
             return document;
 
-        string replacementText;
-        if (isOr)
-        {
-            replacementText = BuildOrReplacement(leaves);
-        }
-        else
-        {
-            replacementText = BuildAndReplacement(leaves);
-        }
+        var replacementText = isOr ? BuildOrReplacement(leaves) : BuildAndReplacement(leaves);
 
         var replacement = SyntaxFactory
             .ParseExpression(replacementText)
@@ -86,18 +78,14 @@ public sealed class LogicalPatternCodeFix : CodeFixProvider
 
     private static string BuildOrPatternPart(ExpressionSyntax leaf)
     {
-        if (leaf is PrefixUnaryExpressionSyntax)
-            return "null";
-
-        if (leaf is IsPatternExpressionSyntax isPattern)
-            return isPattern.Pattern.WithoutTrivia().ToString();
-
-        var comparison = (BinaryExpressionSyntax)leaf;
-
-        if (comparison.IsKind(SyntaxKind.EqualsExpression))
-            return GetConstant(comparison);
-
-        return BuildRelationalPattern(comparison);
+        return leaf switch
+        {
+            PrefixUnaryExpressionSyntax => "null",
+            IsPatternExpressionSyntax isPattern => isPattern.Pattern.WithoutTrivia().ToString(),
+            BinaryExpressionSyntax { RawKind: (int)SyntaxKind.EqualsExpression } comparison => GetConstant(comparison),
+            BinaryExpressionSyntax comparison => BuildRelationalPattern(comparison),
+            _ => throw new InvalidOperationException($"Unexpected leaf type: {leaf.GetType().Name}"),
+        };
     }
 
     private static string BuildAndReplacement(List<ExpressionSyntax> leaves)
@@ -109,21 +97,16 @@ public sealed class LogicalPatternCodeFix : CodeFixProvider
 
     private static string BuildAndPatternPart(ExpressionSyntax leaf)
     {
-        if (leaf is MemberAccessExpressionSyntax)
-            return "not null";
-
-        if (leaf is PrefixUnaryExpressionSyntax)
-            return "null";
-
-        if (leaf is IsPatternExpressionSyntax isPattern)
-            return isPattern.Pattern.WithoutTrivia().ToString();
-
-        var comparison = (BinaryExpressionSyntax)leaf;
-
-        if (comparison.IsKind(SyntaxKind.NotEqualsExpression))
-            return $"not {GetConstant(comparison)}";
-
-        return BuildRelationalPattern(comparison);
+        return leaf switch
+        {
+            MemberAccessExpressionSyntax => "not null",
+            PrefixUnaryExpressionSyntax => "null",
+            IsPatternExpressionSyntax isPattern => isPattern.Pattern.WithoutTrivia().ToString(),
+            BinaryExpressionSyntax { RawKind: (int)SyntaxKind.NotEqualsExpression } comparison =>
+                $"not {GetConstant(comparison)}",
+            BinaryExpressionSyntax comparison => BuildRelationalPattern(comparison),
+            _ => throw new InvalidOperationException($"Unexpected leaf type: {leaf.GetType().Name}"),
+        };
     }
 
     private static string BuildRelationalPattern(BinaryExpressionSyntax comparison)

@@ -98,7 +98,7 @@ public sealed class MultipleEnumerationCodeFix : CodeFixProvider
             _ => null,
         };
 
-        if (body is null || body.Statements.Count == 0)
+        if (body is null || body.Statements.Count is 0)
         {
             return document;
         }

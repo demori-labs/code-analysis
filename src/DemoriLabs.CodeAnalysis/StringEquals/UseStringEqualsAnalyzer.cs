@@ -112,8 +112,12 @@ public sealed class UseStringEqualsAnalyzer : DiagnosticAnalyzer
         {
             case ConstantPatternSyntax
             {
-                Expression: LiteralExpressionSyntax { RawKind: (int)SyntaxKind.StringLiteralExpression } literal,
-            } when literal.Token.ValueText.Length > 0:
+                Expression: LiteralExpressionSyntax
+                {
+                    RawKind: (int)SyntaxKind.StringLiteralExpression,
+                    Token.ValueText.Length: > 0,
+                } literal,
+            }:
                 literalText = literal.ToString();
                 isNegated = false;
                 break;
@@ -125,9 +129,10 @@ public sealed class UseStringEqualsAnalyzer : DiagnosticAnalyzer
                     Expression: LiteralExpressionSyntax
                     {
                         RawKind: (int)SyntaxKind.StringLiteralExpression,
+                        Token.ValueText.Length: > 0,
                     } innerLiteral,
                 },
-            } when innerLiteral.Token.ValueText.Length > 0:
+            }:
                 literalText = innerLiteral.ToString();
                 isNegated = true;
                 break;

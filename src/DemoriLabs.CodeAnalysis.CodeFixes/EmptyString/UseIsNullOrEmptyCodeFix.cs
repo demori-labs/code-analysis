@@ -17,7 +17,10 @@ public sealed class UseIsNullOrEmptyCodeFix : CodeFixProvider
     public override ImmutableArray<string> FixableDiagnosticIds => [RuleIdentifiers.UseIsNullOrEmpty];
 
     /// <inheritdoc />
-    public override FixAllProvider GetFixAllProvider() => WellKnownFixAllProviders.BatchFixer;
+    public override FixAllProvider GetFixAllProvider()
+    {
+        return WellKnownFixAllProviders.BatchFixer;
+    }
 
     /// <inheritdoc />
     public override async Task RegisterCodeFixesAsync(CodeFixContext context)
@@ -100,10 +103,9 @@ public sealed class UseIsNullOrEmptyCodeFix : CodeFixProvider
         if (IsEmptyStringExpr(binary.Left, semanticModel, ct))
             return FormatResult(binary.Right.WithoutTrivia().ToFullString(), isNegated);
 
-        if (IsEmptyStringExpr(binary.Right, semanticModel, ct))
-            return FormatResult(binary.Left.WithoutTrivia().ToFullString(), isNegated);
-
-        return null;
+        return IsEmptyStringExpr(binary.Right, semanticModel, ct)
+            ? FormatResult(binary.Left.WithoutTrivia().ToFullString(), isNegated)
+            : null;
     }
 
     private static string? BuildIsPatternReplacement(
@@ -114,80 +116,56 @@ public sealed class UseIsNullOrEmptyCodeFix : CodeFixProvider
     {
         var exprText = isPattern.Expression.WithoutTrivia().ToFullString();
 
-        // str is "" / str is null or ""
-        if (
-            isPattern.Pattern is ConstantPatternSyntax { Expression: LiteralExpressionSyntax literal }
-            && IsEmptyStringLiteral(literal)
-        )
+        switch (isPattern.Pattern)
         {
-            return FormatResult(exprText, isNegated: false);
-        }
-
-        // str is not ""
-        if (
-            isPattern.Pattern
-                is UnaryPatternSyntax
+            // str is "" / str is null or ""
+            case ConstantPatternSyntax { Expression: LiteralExpressionSyntax literal }
+                when IsEmptyStringLiteral(literal):
+                return FormatResult(exprText, isNegated: false);
+            // str is not ""
+            case UnaryPatternSyntax
+            {
+                RawKind: (int)SyntaxKind.NotPattern,
+                Pattern: ConstantPatternSyntax { Expression: LiteralExpressionSyntax notLiteral },
+            } when IsEmptyStringLiteral(notLiteral):
+                return FormatResult(exprText, isNegated: true);
+            // str is null or ""
+            case BinaryPatternSyntax
+            {
+                RawKind: (int)SyntaxKind.OrPattern,
+                Left: ConstantPatternSyntax { Expression.RawKind: (int)SyntaxKind.NullLiteralExpression },
+                Right: ConstantPatternSyntax { Expression: LiteralExpressionSyntax orLiteral },
+            } when IsEmptyStringLiteral(orLiteral):
+                return FormatResult(exprText, isNegated: false);
+            // str is not null and not ""
+            case BinaryPatternSyntax
+            {
+                RawKind: (int)SyntaxKind.AndPattern,
+                Left: UnaryPatternSyntax
                 {
                     RawKind: (int)SyntaxKind.NotPattern,
-                    Pattern: ConstantPatternSyntax { Expression: LiteralExpressionSyntax notLiteral },
-                }
-            && IsEmptyStringLiteral(notLiteral)
-        )
-        {
-            return FormatResult(exprText, isNegated: true);
-        }
-
-        // str is null or ""
-        if (
-            isPattern.Pattern
-                is BinaryPatternSyntax
+                    Pattern: ConstantPatternSyntax { Expression.RawKind: (int)SyntaxKind.NullLiteralExpression },
+                },
+                Right: UnaryPatternSyntax
                 {
-                    RawKind: (int)SyntaxKind.OrPattern,
-                    Left: ConstantPatternSyntax { Expression.RawKind: (int)SyntaxKind.NullLiteralExpression },
-                    Right: ConstantPatternSyntax { Expression: LiteralExpressionSyntax orLiteral },
-                }
-            && IsEmptyStringLiteral(orLiteral)
-        )
-        {
-            return FormatResult(exprText, isNegated: false);
-        }
-
-        // str is not null and not ""
-        if (
-            isPattern.Pattern
-                is BinaryPatternSyntax
-                {
-                    RawKind: (int)SyntaxKind.AndPattern,
-                    Left: UnaryPatternSyntax
-                    {
-                        RawKind: (int)SyntaxKind.NotPattern,
-                        Pattern: ConstantPatternSyntax { Expression.RawKind: (int)SyntaxKind.NullLiteralExpression },
-                    },
-                    Right: UnaryPatternSyntax
-                    {
-                        RawKind: (int)SyntaxKind.NotPattern,
-                        Pattern: ConstantPatternSyntax { Expression: LiteralExpressionSyntax andLiteral },
-                    },
-                }
-            && IsEmptyStringLiteral(andLiteral)
-        )
-        {
-            return FormatResult(exprText, isNegated: true);
+                    RawKind: (int)SyntaxKind.NotPattern,
+                    Pattern: ConstantPatternSyntax { Expression: LiteralExpressionSyntax andLiteral },
+                },
+            } when IsEmptyStringLiteral(andLiteral):
+                return FormatResult(exprText, isNegated: true);
         }
 
         // str.Length is 0 / str.Length is not 0
-        if (isPattern.Expression is MemberAccessExpressionSyntax { Name.Identifier.Text: "Length" } lengthAccess)
-        {
-            var receiverType = semanticModel.GetTypeInfo(lengthAccess.Expression, ct).Type;
-            if (receiverType?.SpecialType is SpecialType.System_String)
-            {
-                var receiverText = lengthAccess.Expression.WithoutTrivia().ToFullString();
-                var isNegated = isPattern.Pattern is UnaryPatternSyntax { RawKind: (int)SyntaxKind.NotPattern };
-                return FormatResult(receiverText, isNegated);
-            }
-        }
+        if (isPattern.Expression is not MemberAccessExpressionSyntax { Name.Identifier.Text: "Length" } lengthAccess)
+            return null;
 
-        return null;
+        var receiverType = semanticModel.GetTypeInfo(lengthAccess.Expression, ct).Type;
+        if (receiverType?.SpecialType is not SpecialType.System_String)
+            return null;
+
+        var receiverText = lengthAccess.Expression.WithoutTrivia().ToFullString();
+        var isNegated = isPattern.Pattern is UnaryPatternSyntax { RawKind: (int)SyntaxKind.NotPattern };
+        return FormatResult(receiverText, isNegated);
     }
 
     private static string? BuildInvocationReplacement(
@@ -199,33 +177,36 @@ public sealed class UseIsNullOrEmptyCodeFix : CodeFixProvider
         var symbol = semanticModel.GetSymbolInfo(invocation, ct).Symbol;
         if (
             symbol is not IMethodSymbol method
-            || string.Equals(method.Name, "Equals", System.StringComparison.Ordinal) is false
+            || string.Equals(method.Name, "Equals", StringComparison.Ordinal) is false
             || method.ContainingType?.SpecialType is not SpecialType.System_String
         )
         {
             return null;
         }
 
-        if (method.IsStatic && invocation.ArgumentList.Arguments.Count >= 2)
+        switch (method.IsStatic)
         {
-            var arg0 = invocation.ArgumentList.Arguments[0].Expression;
-            var arg1 = invocation.ArgumentList.Arguments[1].Expression;
+            case true when invocation.ArgumentList.Arguments.Count >= 2:
+            {
+                var arg0 = invocation.ArgumentList.Arguments[0].Expression;
+                var arg1 = invocation.ArgumentList.Arguments[1].Expression;
 
-            if (IsEmptyStringExpr(arg0, semanticModel, ct))
-                return FormatResult(arg1.WithoutTrivia().ToFullString(), isNegated: false);
+                if (IsEmptyStringExpr(arg0, semanticModel, ct))
+                    return FormatResult(arg1.WithoutTrivia().ToFullString(), isNegated: false);
 
-            if (IsEmptyStringExpr(arg1, semanticModel, ct))
-                return FormatResult(arg0.WithoutTrivia().ToFullString(), isNegated: false);
-        }
-        else if (
-            method.IsStatic is false
-            && invocation.ArgumentList.Arguments.Count >= 1
-            && invocation.Expression is MemberAccessExpressionSyntax memberAccess
-        )
-        {
-            var arg0 = invocation.ArgumentList.Arguments[0].Expression;
-            if (IsEmptyStringExpr(arg0, semanticModel, ct))
-                return FormatResult(memberAccess.Expression.WithoutTrivia().ToFullString(), isNegated: false);
+                if (IsEmptyStringExpr(arg1, semanticModel, ct))
+                    return FormatResult(arg0.WithoutTrivia().ToFullString(), isNegated: false);
+                break;
+            }
+            case false
+                when invocation.ArgumentList.Arguments.Count >= 1
+                    && invocation.Expression is MemberAccessExpressionSyntax memberAccess:
+            {
+                var arg0 = invocation.ArgumentList.Arguments[0].Expression;
+                if (IsEmptyStringExpr(arg0, semanticModel, ct))
+                    return FormatResult(memberAccess.Expression.WithoutTrivia().ToFullString(), isNegated: false);
+                break;
+            }
         }
 
         return null;
@@ -233,22 +214,13 @@ public sealed class UseIsNullOrEmptyCodeFix : CodeFixProvider
 
     private static bool IsEmptyStringExpr(ExpressionSyntax expr, SemanticModel semanticModel, CancellationToken ct)
     {
-        if (expr is LiteralExpressionSyntax literal && IsEmptyStringLiteral(literal))
-            return true;
-
-        if (expr is MemberAccessExpressionSyntax)
+        return expr switch
         {
-            var symbol = semanticModel.GetSymbolInfo(expr, ct).Symbol;
-            if (
-                symbol is IFieldSymbol { Name: "Empty" }
-                && symbol.ContainingType?.SpecialType is SpecialType.System_String
-            )
-            {
-                return true;
-            }
-        }
-
-        return false;
+            LiteralExpressionSyntax literal when IsEmptyStringLiteral(literal) => true,
+            MemberAccessExpressionSyntax => semanticModel.GetSymbolInfo(expr, ct).Symbol
+                is IFieldSymbol { Name: "Empty", ContainingType.SpecialType: SpecialType.System_String },
+            _ => false,
+        };
     }
 
     private static bool IsEmptyStringLiteral(LiteralExpressionSyntax literal)
@@ -269,21 +241,15 @@ public sealed class UseIsNullOrEmptyCodeFix : CodeFixProvider
         if (zeroSide is not LiteralExpressionSyntax { Token.ValueText: "0" })
             return false;
 
-        ExpressionSyntax? actualReceiver = null;
-
-        if (lengthSide is MemberAccessExpressionSyntax { Name.Identifier.Text: "Length" } memberAccess)
+        var actualReceiver = lengthSide switch
         {
-            actualReceiver = memberAccess.Expression;
-        }
-        else if (
-            lengthSide is ConditionalAccessExpressionSyntax
+            MemberAccessExpressionSyntax { Name.Identifier.Text: "Length" } memberAccess => memberAccess.Expression,
+            ConditionalAccessExpressionSyntax
             {
                 WhenNotNull: MemberBindingExpressionSyntax { Name.Identifier.Text: "Length" },
-            } conditionalAccess
-        )
-        {
-            actualReceiver = conditionalAccess.Expression;
-        }
+            } conditionalAccess => conditionalAccess.Expression,
+            _ => null,
+        };
 
         if (actualReceiver is null)
             return false;
