@@ -1,5 +1,5 @@
 <Project>
-    <Import Project="$(EngineeringDir)packages/Testing.props" />
+    <Import Project="$(MSBuildThisFileDirectory)../eng/packages/Testing.props" />
     <ItemGroup>
         <PackageVersion Include="Microsoft.CodeAnalysis.CSharp.Analyzer.Testing" Version="1.1.3" />
         <PackageVersion Include="Microsoft.CodeAnalysis.CSharp.CodeFix.Testing" Version="1.1.3" />
