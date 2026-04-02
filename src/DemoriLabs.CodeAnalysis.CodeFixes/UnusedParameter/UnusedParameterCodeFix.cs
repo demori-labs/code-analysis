@@ -54,14 +54,13 @@ public sealed class UnusedParameterCodeFix : CodeFixProvider
     )
     {
         var semanticModel = await document.GetSemanticModelAsync(ct).ConfigureAwait(false);
-        if (semanticModel is null)
+        if (
+            semanticModel?.GetDeclaredSymbol(parameter, ct)
+            is not IParameterSymbol { ContainingSymbol: IMethodSymbol methodSymbol } parameterSymbol
+        )
+        {
             return document.Project.Solution;
-
-        if (semanticModel.GetDeclaredSymbol(parameter, ct) is not IParameterSymbol parameterSymbol)
-            return document.Project.Solution;
-
-        if (parameterSymbol.ContainingSymbol is not IMethodSymbol methodSymbol)
-            return document.Project.Solution;
+        }
 
         var parameterIndex = -1;
         for (var i = 0; i < methodSymbol.Parameters.Length; i++)
@@ -93,7 +92,7 @@ public sealed class UnusedParameterCodeFix : CodeFixProvider
         // Also collect the parameter declaration itself
         if (!documentEdits.TryGetValue(document.Id, out var declEdits))
         {
-            declEdits = new List<SyntaxNode>();
+            declEdits = [];
             documentEdits[document.Id] = declEdits;
         }
 
@@ -165,7 +164,7 @@ public sealed class UnusedParameterCodeFix : CodeFixProvider
     {
         if (!edits.TryGetValue(docId, out var list))
         {
-            list = new List<SyntaxNode>();
+            list = [];
             edits[docId] = list;
         }
 

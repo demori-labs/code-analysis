@@ -113,13 +113,7 @@ public sealed class SuggestReadOnlyMethodParameterAnalyzer : DiagnosticAnalyzer
         if (method.MethodKind is MethodKind.ExplicitInterfaceImplementation)
             return true;
 
-        if (IsEntryPoint(method))
-            return true;
-
-        if (IsEventHandlerSignature(method))
-            return true;
-
-        return false;
+        return IsEntryPoint(method) || IsEventHandlerSignature(method);
     }
 
     private static bool IsEntryPoint(IMethodSymbol method)
@@ -161,10 +155,8 @@ public sealed class SuggestReadOnlyMethodParameterAnalyzer : DiagnosticAnalyzer
     {
         var candidates = new HashSet<ISymbol>(SymbolEqualityComparer.Default);
 
-        for (var i = 0; i < method.Parameters.Length; i++)
+        foreach (var param in method.Parameters)
         {
-            var param = method.Parameters[i];
-
             if (param.RefKind is not RefKind.None)
                 continue;
 

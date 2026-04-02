@@ -524,7 +524,7 @@ public sealed class RecordPrimaryConstructorTooManyParametersCodeFix : CodeFixPr
         CancellationToken ct
     )
     {
-        if (attributeLists.Count == 0)
+        if (attributeLists.Count is 0)
             return attributeLists;
 
         var result = new List<AttributeListSyntax>();

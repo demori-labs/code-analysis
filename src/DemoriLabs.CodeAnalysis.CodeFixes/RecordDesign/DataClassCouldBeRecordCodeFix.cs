@@ -301,10 +301,9 @@ public sealed class DataClassCouldBeRecordCodeFix : CodeFixProvider
         if (assignedPropertyNames.Contains(property.Identifier.Text))
             return ConvertConstructorAssignedProperty(property, ctorParamToProperty);
 
-        if (IsInitialisedFromPrimaryConstructor(property, primaryCtorParamNames))
-            return ConvertPrimaryCtorInitialisedProperty(property);
-
-        return ConvertPropertyToImmutable(property);
+        return IsInitialisedFromPrimaryConstructor(property, primaryCtorParamNames)
+            ? ConvertPrimaryCtorInitialisedProperty(property)
+            : ConvertPropertyToImmutable(property);
     }
 
     private static RecordDeclarationSyntax BuildRecordDeclaration(

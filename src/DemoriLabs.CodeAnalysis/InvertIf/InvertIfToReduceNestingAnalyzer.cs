@@ -108,7 +108,7 @@ public sealed class InvertIfToReduceNestingAnalyzer : DiagnosticAnalyzer
         {
             BlockSyntax block => block.Statements.Count > 0 && IsExitStatement(block.Statements.Last()),
             IfStatementSyntax { Statement: BlockSyntax elseIfBlock }
-                when IsExitStatement(elseIfBlock.Statements[elseIfBlock.Statements.Count - 1]) is false => false,
+                when IsExitStatement(elseIfBlock.Statements[^1]) is false => false,
             IfStatementSyntax { Else: not null } elseIf => ElseChainEndsWithExits(elseIf.Else),
             IfStatementSyntax => true,
             _ => IsExitStatement(elseStatement),

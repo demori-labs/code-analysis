@@ -20,7 +20,7 @@ internal static class NamespaceImportResolver
             return root;
         }
 
-        var isFirst = compilationUnit.Usings.Count == 0;
+        var isFirst = compilationUnit.Usings.Count is 0;
 
         var usingDirective = SyntaxFactory
             .UsingDirective(SyntaxFactory.ParseName(namespaceName))

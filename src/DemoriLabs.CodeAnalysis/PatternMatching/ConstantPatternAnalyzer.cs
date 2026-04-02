@@ -42,7 +42,11 @@ public sealed class ConstantPatternAnalyzer : DiagnosticAnalyzer
             );
 
             compilationContext.RegisterSyntaxNodeAction(
-                analysisContext => AnalyzeIsTrueFalsePattern(analysisContext, expressionType),
+                analysisContext =>
+                {
+                    AnalyzeIsTrueFalsePattern(analysisContext, expressionType);
+                    AnalyzeIsDefaultPattern(analysisContext, expressionType);
+                },
                 SyntaxKind.IsPatternExpression
             );
         });
@@ -80,13 +84,20 @@ public sealed class ConstantPatternAnalyzer : DiagnosticAnalyzer
 
         var constant = leftIsConstant ? left : right;
 
-        // Skip non-null string comparisons — a dedicated analyser will suggest string.Equals with StringComparison
+        // Skip non-null string comparisons — a dedicated analyzer will suggest string.Equals with StringComparison
         if (
             constant is LiteralExpressionSyntax
             {
                 RawKind: (int)SyntaxKind.StringLiteralExpression or (int)SyntaxKind.Utf8StringLiteralExpression,
             }
         )
+        {
+            return;
+        }
+
+        // Skip str.Length == 0 — DL5002 suggests string.IsNullOrEmpty instead
+        var variable2 = leftIsConstant ? right : left;
+        if (IsStringLengthZeroComparison(variable2, constant, context.SemanticModel, context.CancellationToken))
         {
             return;
         }
@@ -107,7 +118,13 @@ public sealed class ConstantPatternAnalyzer : DiagnosticAnalyzer
         var isEquals = binaryExpression.IsKind(SyntaxKind.EqualsExpression);
         var variable = leftIsConstant ? right : left;
 
-        var constantText = constant.ToString();
+        var constantText = DefaultPatternResolver.IsDefaultExpression(constant)
+            ? DefaultPatternResolver.ResolveDefaultPatternText(
+                variable,
+                context.SemanticModel,
+                context.CancellationToken
+            )
+            : constant.ToString();
         var variableText = variable.ToString();
 
         var suggestion = isEquals ? $"{variableText} is {constantText}" : $"{variableText} is not {constantText}";
@@ -231,16 +248,62 @@ public sealed class ConstantPatternAnalyzer : DiagnosticAnalyzer
                     context.SemanticModel,
                     context.CancellationToken
                 );
-                if (suggestion is not null)
-                {
-                    context.ReportDiagnostic(
-                        Diagnostic.Create(Rule, isPattern.GetLocation(), suggestion, isPattern.ToString())
-                    );
-                }
+
+                context.ReportDiagnostic(
+                    Diagnostic.Create(Rule, isPattern.GetLocation(), suggestion, isPattern.ToString())
+                );
 
                 break;
             }
         }
+    }
+
+    private static void AnalyzeIsDefaultPattern(SyntaxNodeAnalysisContext context, INamedTypeSymbol? expressionType)
+    {
+        var isPattern = (IsPatternExpressionSyntax)context.Node;
+
+        bool isNegated;
+        switch (isPattern.Pattern)
+        {
+            case ConstantPatternSyntax { Expression: var expr } when DefaultPatternResolver.IsDefaultExpression(expr):
+                isNegated = false;
+                break;
+            case UnaryPatternSyntax
+            {
+                RawKind: (int)SyntaxKind.NotPattern,
+                Pattern: ConstantPatternSyntax { Expression: var expr },
+            } when DefaultPatternResolver.IsDefaultExpression(expr):
+                isNegated = true;
+                break;
+            default:
+                return;
+        }
+
+        if (
+            expressionType is not null
+            && ExpressionTreeHelper.IsInsideExpressionTree(
+                isPattern,
+                context.SemanticModel,
+                expressionType,
+                context.CancellationToken
+            )
+        )
+        {
+            return;
+        }
+
+        var variableText = isPattern.Expression.WithoutTrivia().ToFullString();
+        var resolvedDefault = DefaultPatternResolver.ResolveDefaultPatternText(
+            isPattern.Expression,
+            context.SemanticModel,
+            context.CancellationToken
+        );
+
+        var suggestion = isNegated
+            ? $"{variableText} is not {resolvedDefault}"
+            : $"{variableText} is {resolvedDefault}";
+
+        context.ReportDiagnostic(Diagnostic.Create(Rule, isPattern.GetLocation(), suggestion, isPattern.ToString()));
     }
 
     private static string BuildComparisonSimplification(BinaryExpressionSyntax comparison, bool negate)
@@ -266,7 +329,7 @@ public sealed class ConstantPatternAnalyzer : DiagnosticAnalyzer
         return resultIsPositive ? $"{variableText} is {constantText}" : $"{variableText} is not {constantText}";
     }
 
-    private static string? BuildNegationSimplification(
+    private static string BuildNegationSimplification(
         PrefixUnaryExpressionSyntax negation,
         bool isFalsePattern,
         SemanticModel semanticModel,
@@ -303,22 +366,20 @@ public sealed class ConstantPatternAnalyzer : DiagnosticAnalyzer
     {
         var expr = isPattern.Expression.WithoutTrivia().ToFullString();
 
-        if (negate)
-        {
-            if (isPattern.Pattern is UnaryPatternSyntax { RawKind: (int)SyntaxKind.NotPattern } notPattern)
-            {
-                return $"{expr} is {notPattern.Pattern.WithoutTrivia().ToFullString()}";
-            }
+        if (!negate)
+            return $"{expr} is {isPattern.Pattern.WithoutTrivia().ToFullString()}";
 
-            return $"{expr} is not {isPattern.Pattern.WithoutTrivia().ToFullString()}";
+        if (isPattern.Pattern is UnaryPatternSyntax { RawKind: (int)SyntaxKind.NotPattern } notPattern)
+        {
+            return $"{expr} is {notPattern.Pattern.WithoutTrivia().ToFullString()}";
         }
 
-        return $"{expr} is {isPattern.Pattern.WithoutTrivia().ToFullString()}";
+        return $"{expr} is not {isPattern.Pattern.WithoutTrivia().ToFullString()}";
     }
 
     private static bool IsWrappedInOuterComparison(SyntaxNode inner)
     {
-        SyntaxNode? current = inner.Parent;
+        var current = inner.Parent;
         while (current is ParenthesizedExpressionSyntax)
             current = current.Parent;
 
@@ -335,7 +396,7 @@ public sealed class ConstantPatternAnalyzer : DiagnosticAnalyzer
                 Pattern: ConstantPatternSyntax
                     {
                         Expression.RawKind: (int)SyntaxKind.TrueLiteralExpression
-                            or (int)SyntaxKind.FalseLiteralExpression
+                            or (int)SyntaxKind.FalseLiteralExpression,
                     }
                     or UnaryPatternSyntax
                     {
@@ -343,9 +404,9 @@ public sealed class ConstantPatternAnalyzer : DiagnosticAnalyzer
                         Pattern: ConstantPatternSyntax
                         {
                             Expression.RawKind: (int)SyntaxKind.TrueLiteralExpression
-                                or (int)SyntaxKind.FalseLiteralExpression
-                        }
-                    }
+                                or (int)SyntaxKind.FalseLiteralExpression,
+                        },
+                    },
             } => true,
             _ => false,
         };
@@ -378,5 +439,22 @@ public sealed class ConstantPatternAnalyzer : DiagnosticAnalyzer
                 return constantValue.HasValue;
             }
         }
+    }
+
+    private static bool IsStringLengthZeroComparison(
+        ExpressionSyntax variable,
+        ExpressionSyntax constant,
+        SemanticModel semanticModel,
+        CancellationToken ct
+    )
+    {
+        if (constant is not LiteralExpressionSyntax { Token.ValueText: "0" })
+            return false;
+
+        if (variable is not MemberAccessExpressionSyntax { Name.Identifier.Text: "Length" } memberAccess)
+            return false;
+
+        var receiverType = semanticModel.GetTypeInfo(memberAccess.Expression, ct).Type;
+        return receiverType?.SpecialType is SpecialType.System_String;
     }
 }

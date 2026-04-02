@@ -121,7 +121,7 @@ public sealed class NegationPatternAnalyzer : DiagnosticAnalyzer
 
     private static bool IsInsideIsTrueFalsePattern(PrefixUnaryExpressionSyntax node)
     {
-        SyntaxNode? current = node.Parent;
+        var current = node.Parent;
         while (current is ParenthesizedExpressionSyntax)
             current = current.Parent;
 
@@ -131,7 +131,7 @@ public sealed class NegationPatternAnalyzer : DiagnosticAnalyzer
                 Pattern: ConstantPatternSyntax
                     {
                         Expression.RawKind: (int)SyntaxKind.TrueLiteralExpression
-                            or (int)SyntaxKind.FalseLiteralExpression
+                            or (int)SyntaxKind.FalseLiteralExpression,
                     }
                     or UnaryPatternSyntax
                     {
@@ -139,9 +139,9 @@ public sealed class NegationPatternAnalyzer : DiagnosticAnalyzer
                         Pattern: ConstantPatternSyntax
                         {
                             Expression.RawKind: (int)SyntaxKind.TrueLiteralExpression
-                                or (int)SyntaxKind.FalseLiteralExpression
-                        }
-                    }
+                                or (int)SyntaxKind.FalseLiteralExpression,
+                        },
+                    },
             };
     }
 

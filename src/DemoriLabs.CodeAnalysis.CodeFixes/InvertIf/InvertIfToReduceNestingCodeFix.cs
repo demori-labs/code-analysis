@@ -567,7 +567,7 @@ public sealed class InvertIfToReduceNestingCodeFix : CodeFixProvider
 
     private static bool BodyEndsWithExit(BlockSyntax block)
     {
-        if (block.Statements.Count == 0)
+        if (block.Statements.Count is 0)
             return false;
 
         var last = block.Statements.Last();

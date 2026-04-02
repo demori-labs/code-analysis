@@ -256,6 +256,42 @@ public class ConstantPatternAnalyzerTests
     }
 
     [Test]
+    public async Task EqualsEmptyStringLiteral_NoDiagnostic()
+    {
+        var test = CreateTest(
+            """
+            public class C
+            {
+                public void M(string s)
+                {
+                    if (s == "") { }
+                }
+            }
+            """
+        );
+
+        await test.RunAsync();
+    }
+
+    [Test]
+    public async Task StringLengthEqualsZero_NoDiagnostic()
+    {
+        var test = CreateTest(
+            """
+            public class C
+            {
+                public void M(string s)
+                {
+                    if (s.Length == 0) { }
+                }
+            }
+            """
+        );
+
+        await test.RunAsync();
+    }
+
+    [Test]
     public async Task EqualsEnumMember_ReportsDiagnostic()
     {
         var test = CreateTest(
@@ -1303,6 +1339,262 @@ public class ConstantPatternAnalyzerTests
                 public void M(bool flag)
                 {
                     if ({|DL3003:(!flag) is false|}) { }
+                }
+            }
+            """
+        );
+
+        await test.RunAsync();
+    }
+
+    [Test]
+    public async Task IntEqualsDefault_ReportsDiagnostic()
+    {
+        var test = CreateTest(
+            """
+            public class C
+            {
+                public void M(int x)
+                {
+                    if ({|DL3003:x == default|}) { }
+                }
+            }
+            """
+        );
+
+        await test.RunAsync();
+    }
+
+    [Test]
+    public async Task BoolEqualsDefault_ReportsDiagnostic()
+    {
+        var test = CreateTest(
+            """
+            public class C
+            {
+                public void M(bool b)
+                {
+                    if ({|DL3003:b == default|}) { }
+                }
+            }
+            """
+        );
+
+        await test.RunAsync();
+    }
+
+    [Test]
+    public async Task EnumEqualsDefault_ReportsDiagnostic()
+    {
+        var test = CreateTest(
+            """
+            public enum Status { Active, Inactive }
+
+            public class C
+            {
+                public void M(Status s)
+                {
+                    if ({|DL3003:s == default|}) { }
+                }
+            }
+            """
+        );
+
+        await test.RunAsync();
+    }
+
+    [Test]
+    public async Task ObjectEqualsDefault_ReportsDiagnostic()
+    {
+        var test = CreateTest(
+            """
+            public class C
+            {
+                public void M(object? o)
+                {
+                    if ({|DL3003:o == default|}) { }
+                }
+            }
+            """
+        );
+
+        await test.RunAsync();
+    }
+
+    [Test]
+    public async Task NullableIntEqualsDefault_ReportsDiagnostic()
+    {
+        var test = CreateTest(
+            """
+            public class C
+            {
+                public void M(int? x)
+                {
+                    if ({|DL3003:x == default|}) { }
+                }
+            }
+            """
+        );
+
+        await test.RunAsync();
+    }
+
+    [Test]
+    public async Task StringEqualsDefault_ReportsDiagnostic()
+    {
+        var test = CreateTest(
+            """
+            public class C
+            {
+                public void M(string? s)
+                {
+                    if ({|DL3003:s == default|}) { }
+                }
+            }
+            """
+        );
+
+        await test.RunAsync();
+    }
+
+    [Test]
+    public async Task DoubleEqualsDefault_ReportsDiagnostic()
+    {
+        var test = CreateTest(
+            """
+            public class C
+            {
+                public void M(double d)
+                {
+                    if ({|DL3003:d == default|}) { }
+                }
+            }
+            """
+        );
+
+        await test.RunAsync();
+    }
+
+    [Test]
+    public async Task IntEqualsDefaultOfT_ReportsDiagnostic()
+    {
+        var test = CreateTest(
+            """
+            public class C
+            {
+                public void M(int x)
+                {
+                    if ({|DL3003:x == default(int)|}) { }
+                }
+            }
+            """
+        );
+
+        await test.RunAsync();
+    }
+
+    [Test]
+    public async Task ObjectEqualsDefaultOfT_ReportsDiagnostic()
+    {
+        var test = CreateTest(
+            """
+            public class C
+            {
+                public void M(object? o)
+                {
+                    if ({|DL3003:o == default(object)|}) { }
+                }
+            }
+            """
+        );
+
+        await test.RunAsync();
+    }
+
+    [Test]
+    public async Task IntIsDefaultOfT_ReportsDiagnostic()
+    {
+        var test = CreateTest(
+            """
+            public class C
+            {
+                public void M(int x)
+                {
+                    if ({|DL3003:x is default(int)|}) { }
+                }
+            }
+            """
+        );
+
+        await test.RunAsync();
+    }
+
+    [Test]
+    public async Task ObjectIsDefaultOfT_ReportsDiagnostic()
+    {
+        var test = CreateTest(
+            """
+            public class C
+            {
+                public void M(object? o)
+                {
+                    if ({|DL3003:o is default(object)|}) { }
+                }
+            }
+            """
+        );
+
+        await test.RunAsync();
+    }
+
+    [Test]
+    public async Task IntIsNotDefaultOfT_ReportsDiagnostic()
+    {
+        var test = CreateTest(
+            """
+            public class C
+            {
+                public void M(int x)
+                {
+                    if ({|DL3003:x is not default(int)|}) { }
+                }
+            }
+            """
+        );
+
+        await test.RunAsync();
+    }
+
+    [Test]
+    public async Task BoolIsDefaultOfT_ReportsDiagnostic()
+    {
+        var test = CreateTest(
+            """
+            public class C
+            {
+                public void M(bool b)
+                {
+                    if ({|DL3003:b is default(bool)|}) { }
+                }
+            }
+            """
+        );
+
+        await test.RunAsync();
+    }
+
+    [Test]
+    public async Task EnumIsDefaultOfT_ReportsDiagnostic()
+    {
+        var test = CreateTest(
+            """
+            public enum Status { Active, Inactive }
+
+            public class C
+            {
+                public void M(Status s)
+                {
+                    if ({|DL3003:s is default(Status)|}) { }
                 }
             }
             """
