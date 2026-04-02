@@ -1,41 +1,36 @@
-## Summary
+# <!-- Insert Pull Request Title Here -->
 
-<!-- What does this PR do and why? Link related issues with "Closes #123". -->
+## Overview
 
-## Changes
+<!-- Provide a brief summary of the changes introduced and the problem they solve. -->
 
-<!-- Bulleted list of changes. For new analyzers, include rule ID and one-line description. -->
+Resolves # (Insert issue number)
 
-## Type of change
+## Category of Change
 
-- [ ] New analyzer / code fix
-- [ ] Bug fix (non-breaking change that fixes an issue)
-- [ ] Enhancement (non-breaking change that improves existing functionality)
-- [ ] Breaking change (fix or feature that would cause existing behaviour to change)
-- [ ] Documentation / infrastructure
+- [ ] New analyser or code fix
+- [ ] Bug resolution (non-breaking)
+- [ ] Feature enhancement (non-breaking)
+- [ ] Breaking change (modifies existing behaviour)
+- [ ] Documentation or infrastructure update
 
-## Checklist
+## Core Requirements
 
-### Required for all PRs
+- [ ] **Code Quality:** I have self-reviewed my work and manually verified its correctness. (Unverified or low-quality AI-generated submissions will be closed).
+- [ ] **Formatting:** Code adheres to the existing style and has been formatted using CSharpier. Complex logic is appropriately commented.
+- [ ] **Validation:** `dotnet build` completes with zero warnings, and `dotnet test` passes without any failures or skipped tests.
+- [ ] **Housekeeping:** No credentials or sensitive data are included. `CHANGELOG.md` and relevant documentation have been updated.
 
-- [ ] `dotnet build` succeeds with **zero warnings** (`TreatWarningsAsErrors` is enabled)
-- [ ] `dotnet test` passes **all tests** (no skipped or failing)
-- [ ] Code is formatted with CSharpier (`dotnet csharpier .`)
-- [ ] No secrets, credentials, or personal paths in committed files
-- [ ] `CHANGELOG.md` updated under the appropriate version heading
+## Analyser & Code Fix Details (If applicable)
 
-### New or modified analyzer
+- [ ] **Naming & Registration:** The rule ID follows the `DLxxxx` format and is properly registered in `RuleIdentifiers.cs` and `AnalyzerReleases.Unshipped.md`.
+- [ ] **Uniqueness:** The analyser does not duplicate existing Microsoft CA rules.
+- [ ] **Testing Coverage:** Unit tests comprehensively cover positive, negative, and edge-case scenarios.
+- [ ] **Code Fix Accuracy:** The fix generates valid, compilable code whilst preserving syntax trivia (such as comments and whitespace).
+- [ ] **Documentation:** A dedicated `docs/analysers/DLxxxx.md` file has been created, benchmark results are included, and the `README.md` table is updated.
 
-- [ ] Rule ID follows the `DLxxxx` convention (1xxx Design, 2xxx Usage, 3xxx Style, 4xxx Complexity, 5xxx Performance)
-- [ ] Rule registered in `RuleIdentifiers.cs` and `AnalyzerReleases.Unshipped.md`
-- [ ] Tests cover positive, negative, and edge cases
-- [ ] No overlap with existing rules or Microsoft CA rules (document related rules if applicable)
-- [ ] Code fix preserves trivia (comments, whitespace) and produces valid compilable code
-- [ ] Benchmarks created and results included in documentation
-- [ ] Documentation added: `docs/analyzers/DLxxxx.md`, row in `README.md` rules table
+## Performance Checklist (If applicable)
 
-### Performance
-
-- [ ] Expensive semantic model calls guarded by cheap syntax pre-checks
-- [ ] Symbol lookups cached in `RegisterCompilationStartAction`, not per-node
-- [ ] No allocations in hot paths (no LINQ, string interpolation, or closures in callbacks)
+- [ ] **Syntax First:** Expensive semantic model queries are safeguarded by preliminary, lightweight syntax checks.
+- [ ] **Caching:** Symbol lookups are cached within `RegisterCompilationStartAction` rather than being evaluated per-node.
+- [ ] **Memory Efficiency:** Hot execution paths are completely allocation-free (strictly avoiding LINQ, closures, and string interpolation).
