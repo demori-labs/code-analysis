@@ -4,12 +4,23 @@
   "tools": {
     "csharpier": {
       "version": "1.2.6",
-      "commands": ["csharpier"],
+      "commands": [
+        "csharpier"
+      ],
       "rollForward": false
     },
     "nbgv": {
       "version": "3.9.50",
-      "commands": ["nbgv"],
+      "commands": [
+        "nbgv"
+      ],
+      "rollForward": false
+    },
+    "husky": {
+      "version": "0.9.1",
+      "commands": [
+        "husky"
+      ],
       "rollForward": false
     }
   }
