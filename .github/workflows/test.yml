@@ -27,6 +27,14 @@ jobs:
       - name: Check formatting
         run: dotnet csharpier check .
 
+      - name: Debug MSBuild paths
+        run: |
+          echo "Workspace: ${{ github.workspace }}"
+          ls -la src/Directory.Packages.props
+          ls -la eng/packages/
+          dotnet msbuild src/Directory.Packages.props -getProperty:MSBuildThisFileDirectory -t:_DummyTarget 2>/dev/null || true
+          cat src/Directory.Packages.props
+
       - name: Build
         run: dotnet build -c Release -p:TreatWarningsAsErrors=true
 
