@@ -6,4 +6,10 @@
             Visible="false"
         />
     </ItemGroup>
+
+    <!-- Required by DL3018 (namespace must match folder structure) during command-line builds -->
+    <ItemGroup>
+        <CompilerVisibleProperty Include="RootNamespace" />
+        <CompilerVisibleProperty Include="ProjectDir" />
+    </ItemGroup>
 </Project>

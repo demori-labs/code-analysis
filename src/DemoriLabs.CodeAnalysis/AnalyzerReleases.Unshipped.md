@@ -36,3 +36,6 @@ DL3016 | Style | Warning | RedundantTypePatternAnalyzer
 DL2005 | Usage | Warning | UnusedParameterAnalyzer
 DL3017 | Style | Warning | UseStringEqualsAnalyzer
 DL5002 | Performance | Warning | UseIsNullOrEmptyAnalyzer
+DL3018 | Style | Warning | NamespaceDoesNotMatchFolderStructureAnalyzer
+DL3019 | Style | Warning | UseFileScopedNamespaceAnalyzer
+DL3020 | Style | Warning | MultipleNamespacesInFileAnalyzer
