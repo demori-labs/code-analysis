@@ -34,6 +34,9 @@ internal static class RuleIdentifiers
     public const string UseNullConditionalAssignment = "DL3015";
     public const string RedundantTypePattern = "DL3016";
     public const string UseStringEqualsWithComparison = "DL3017";
+    public const string NamespaceDoesNotMatchFolderStructure = "DL3018";
+    public const string UseFileScopedNamespace = "DL3019";
+    public const string MultipleNamespacesInFile = "DL3020";
 
     // DL4xxx — Complexity
     public const string MethodHasModerateCognitiveComplexity = "DL4001";

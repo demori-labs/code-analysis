@@ -52,6 +52,9 @@ Pairing this package with an AI coding assistant yields a highly effective workf
 | [DL3015](docs/analyzers/DL3015.md) | Use null-conditional assignment (`?.`)               | Warning  | Yes      |
 | [DL3016](docs/analyzers/DL3016.md) | Redundant type pattern                               | Warning  | Yes      |
 | [DL3017](docs/analyzers/DL3017.md) | Use `string.Equals` with `StringComparison`          | Warning  | Yes      |
+| [DL3018](docs/analyzers/DL3018.md) | Namespace does not match folder structure             | Warning  | Yes      |
+| [DL3019](docs/analyzers/DL3019.md) | Use file-scoped namespace declaration                | Warning  | Yes      |
+| [DL3020](docs/analyzers/DL3020.md) | File contains multiple different namespaces           | Warning  | No       |
 
 ### Complexity (DL4xxx)
 

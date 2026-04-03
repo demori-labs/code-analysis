@@ -20,6 +20,24 @@ dotnet run --project test/DemoriLabs.CodeAnalysis.Tests.Unit -- --treenode-filte
 dotnet run -c Release --project bench/DemoriLabs.CodeAnalysis.Benchmarks
 ```
 
+## Publishing
+
+Versioning is managed by Nerdbank.GitVersioning (CLI tool, not a package reference). Version is declared in `src/DemoriLabs.CodeAnalysis/version.json`.
+
+- **Feature branches**: prerelease — `1.0.0-beta.{height}` (SemVer 2.0)
+- **Main branch**: release — `1.0.0`
+
+```bash
+# Get the version (use NuGetPackageVersion for prerelease, SimpleVersion for release)
+dotnet nbgv get-version -p src/DemoriLabs.CodeAnalysis -v NuGetPackageVersion
+dotnet nbgv get-version -p src/DemoriLabs.CodeAnalysis -v SimpleVersion
+
+# Build and pack
+VERSION=$(dotnet nbgv get-version -p src/DemoriLabs.CodeAnalysis -v NuGetPackageVersion)
+dotnet build DemoriLabs.CodeAnalysis.slnx -c Release
+dotnet pack src/DemoriLabs.CodeAnalysis/DemoriLabs.CodeAnalysis.csproj -c Release -p:PackageVersion=$VERSION --no-build
+```
+
 ## Architecture
 
 Three source projects plus tests and benchmarks:
